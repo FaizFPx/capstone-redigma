@@ -1,0 +1,148 @@
+/**
+ * REDIGMA Magang - Date Utility
+ * Standardized Date Formatting and Parsing for Indonesia (DD/MM/YYYY).
+ * 
+ * Rules:
+ * - User Display / Input: DD/MM/YYYY (e.g., 15/07/2026)
+ * - Database / Internal: YYYY-MM-DD (e.g., 2026-07-15)
+ */
+
+export function isLeapYear(year: number): boolean {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0
+}
+
+export function getDaysInMonth(year: number, month: number): number {
+  if (month < 1 || month > 12) return 0
+  const days = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  return days[month - 1]
+}
+
+/**
+ * Parses user input in DD/MM/YYYY or DD-MM-YYYY format to internal YYYY-MM-DD format.
+ * Returns null if the date is invalid (e.g. 32/01/2026, 31/02/2026, or non-leap 29/02/2026).
+ */
+export function parseDateInput(input: string | null | undefined): string | null {
+  if (!input) return null
+  const trimmed = input.trim()
+  if (!trimmed) return null
+
+  // If already in YYYY-MM-DD format
+  const ymdMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10)
+    const month = parseInt(ymdMatch[2], 10)
+    const day = parseInt(ymdMatch[3], 10)
+    if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12) {
+      if (day >= 1 && day <= getDaysInMonth(year, month)) {
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      }
+    }
+    return null
+  }
+
+  // Standard Indonesian DD/MM/YYYY or DD-MM-YYYY format
+  const dmyMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+  if (!dmyMatch) return null
+
+  const day = parseInt(dmyMatch[1], 10)
+  const month = parseInt(dmyMatch[2], 10)
+  const year = parseInt(dmyMatch[3], 10)
+
+  if (year < 1900 || year > 2100) return null
+  if (month < 1 || month > 12) return null
+  if (day < 1 || day > getDaysInMonth(year, month)) return null
+
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/**
+ * Formats YYYY-MM-DD string, ISO timestamp, or Date object to DD/MM/YYYY.
+ * If input is null, undefined, or empty, returns fallback (default: '-').
+ * Direct string parsing avoids timezone offsets for DATE-only columns.
+ */
+export function formatDate(
+  dateInput: string | Date | null | undefined,
+  fallback = '-'
+): string {
+  if (!dateInput) return fallback
+
+  if (typeof dateInput === 'string') {
+    const trimmed = dateInput.trim()
+    if (!trimmed) return fallback
+
+    // If string starts with YYYY-MM-DD
+    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (match) {
+      const [, y, m, d] = match
+      return `${d}/${m}/${y}`
+    }
+
+    // If string is already DD/MM/YYYY
+    const dmyMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (dmyMatch) {
+      return trimmed
+    }
+  }
+
+  // Fallback for Date objects or ISO strings
+  try {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
+    if (isNaN(d.getTime())) return fallback
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${day}/${month}/${year}`
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Formats ISO timestamp or Date object to DD/MM/YYYY, HH:mm.
+ */
+export function formatDateTime(
+  dateInput: string | Date | null | undefined,
+  fallback = '-'
+): string {
+  if (!dateInput) return fallback
+
+  try {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
+    if (isNaN(d.getTime())) return fallback
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    const hours = String(d.getHours()).padStart(2, '0')
+    const minutes = String(d.getMinutes()).padStart(2, '0')
+    return `${day}/${month}/${year}, ${hours}:${minutes}`
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Formats internal YYYY-MM-DD value to DD/MM/YYYY for pre-filling input fields.
+ * If empty or null, returns empty string.
+ */
+export function formatDateForInput(dateInput: string | null | undefined): string {
+  if (!dateInput) return ''
+  return formatDate(dateInput, '')
+}
+
+/**
+ * Validates that endDate >= startDate.
+ * Accepts either DD/MM/YYYY or YYYY-MM-DD strings.
+ */
+export function isValidDateRange(
+  startDateStr: string | null | undefined,
+  endDateStr: string | null | undefined
+): boolean {
+  if (!startDateStr || !endDateStr) return true
+
+  const startYmd = parseDateInput(startDateStr)
+  const endYmd = parseDateInput(endDateStr)
+
+  if (!startYmd || !endYmd) return false
+
+  return endYmd >= startYmd
+}
