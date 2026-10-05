@@ -18,6 +18,8 @@ function parseOptionalUuid(val?: string | null): string | null {
     trimmed === 'NEW' ||
     trimmed === '-- Tidak ditentukan --' ||
     trimmed === '-- Belum Ditentukan --' ||
+    trimmed === '-- Pilih Jurusan --' ||
+    trimmed === '-- Pilih Institusi --' ||
     trimmed === 'null'
   ) {
     return null
@@ -86,7 +88,7 @@ export async function createApplicationAction(
     institution_id = newInst.id
   }
 
-  if (!institution_id || institution_id === 'NEW') {
+  if (!institution_id || institution_id === 'NEW' || institution_id === '-- Pilih Institusi --') {
     return { error: 'Institusi wajib dipilih atau diisi.' }
   }
 
@@ -106,6 +108,21 @@ export async function createApplicationAction(
     parsedDetails = JSON.parse(detailsJson)
   } catch {
     return { error: 'Format rincian pengajuan tidak valid.' }
+  }
+
+  // 4b. Validasi setiap rincian jurusan wajib dipilih
+  if (Array.isArray(parsedDetails) && parsedDetails.length > 0) {
+    for (let i = 0; i < parsedDetails.length; i++) {
+      const item = parsedDetails[i]
+      const hasMajor = Boolean(parseOptionalUuid(item.major_id))
+      const hasNewMajor = Boolean(item.new_major_name && item.new_major_name.trim().length > 0)
+
+      if (!hasMajor && !hasNewMajor) {
+        return {
+          error: `Jurusan pada Rincian #${i + 1} wajib dipilih. Silakan pilih jurusan dari daftar atau tambahkan jurusan baru.`,
+        }
+      }
+    }
   }
 
   // 5. Insert ke tabel applications
@@ -316,7 +333,7 @@ export async function updateApplicationAction(
     institution_id = newInst.id
   }
 
-  if (!institution_id || institution_id === 'NEW') {
+  if (!institution_id || institution_id === 'NEW' || institution_id === '-- Pilih Institusi --') {
     return { error: 'Institusi wajib dipilih atau diisi.' }
   }
 
@@ -360,6 +377,21 @@ export async function updateApplicationAction(
       approved_quota?: number | string | null
       notes?: string | null
     }>
+
+    // Validasi setiap rincian jurusan wajib dipilih sebelum menghapus rincian lama
+    if (Array.isArray(details) && details.length > 0) {
+      for (let i = 0; i < details.length; i++) {
+        const item = details[i]
+        const hasMajor = Boolean(parseOptionalUuid(item.major_id))
+        const hasNewMajor = Boolean(item.new_major_name && item.new_major_name.trim().length > 0)
+
+        if (!hasMajor && !hasNewMajor) {
+          return {
+            error: `Jurusan pada Rincian #${i + 1} wajib dipilih. Silakan pilih jurusan dari daftar atau tambahkan jurusan baru.`,
+          }
+        }
+      }
+    }
 
     // Hapus detail sebelumnya
     await supabase.from('application_details').delete().eq('application_id', applicationId)

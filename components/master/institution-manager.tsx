@@ -9,21 +9,14 @@ import {
   deleteInstitutionAction,
 } from '@/app/(app)/master/institusi/actions'
 
+import { INSTITUTION_TYPES } from '@/lib/constants/institution'
+
 interface InstitutionManagerProps {
   initialInstitutions: InstitutionItem[]
   queryParam?: string
   typeParam?: string
 }
 
-const INSTITUTION_TYPES = [
-  { value: 'SMK', label: 'SMK (Sekolah Menengah Kejuruan)' },
-  { value: 'UNIVERSITAS', label: 'Universitas' },
-  { value: 'POLITEKNIK', label: 'Politeknik' },
-  { value: 'INSTITUT', label: 'Institut' },
-  { value: 'SEKOLAH_TINGGI', label: 'Sekolah Tinggi' },
-  { value: 'AKADEMI', label: 'Akademi' },
-  { value: 'LAINNYA', label: 'Lainnya' },
-]
 
 export function InstitutionManager({
   initialInstitutions,
@@ -79,6 +72,27 @@ export function InstitutionManager({
       return (
         <span className="inline-flex items-center rounded-md bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-700 border border-teal-200">
           Politeknik
+        </span>
+      )
+    }
+    if (tUpper === 'PESANTREN') {
+      return (
+        <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+          Pesantren
+        </span>
+      )
+    }
+    if (tUpper === 'SEKOLAH_TINGGI' || tUpper === 'SEKOLAH TINGGI') {
+      return (
+        <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700 border border-indigo-200">
+          Sekolah Tinggi
+        </span>
+      )
+    }
+    if (tUpper === 'AKADEMI') {
+      return (
+        <span className="inline-flex items-center rounded-md bg-cyan-50 px-2 py-0.5 text-xs font-semibold text-cyan-700 border border-cyan-200">
+          Akademi
         </span>
       )
     }
@@ -194,6 +208,7 @@ export function InstitutionManager({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari nama institusi, kontak, alamat..."
+              autoComplete="off"
               className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             />
             {search && (
@@ -216,7 +231,7 @@ export function InstitutionManager({
               <option value="ALL">Semua Tipe</option>
               {INSTITUTION_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
-                  {t.value}
+                  {t.label}
                 </option>
               ))}
             </select>
@@ -382,7 +397,7 @@ export function InstitutionManager({
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
+            <form onSubmit={handleCreateSubmit} autoComplete="off" className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
                   Nama Institusi <span className="text-red-500">*</span>
@@ -392,6 +407,7 @@ export function InstitutionManager({
                   name="name"
                   required
                   placeholder="Contoh: SMKN 1 Jakarta atau Universitas Indonesia"
+                  autoComplete="off"
                   className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -422,6 +438,7 @@ export function InstitutionManager({
                   name="address"
                   rows={2}
                   placeholder="Contoh: Jl. Pendidikan No. 45, Jakarta Pusat"
+                  autoComplete="off"
                   className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -435,6 +452,7 @@ export function InstitutionManager({
                     type="email"
                     name="contact_email"
                     placeholder="humas@sekolah.sch.id"
+                    autoComplete="off"
                     className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -447,6 +465,7 @@ export function InstitutionManager({
                     type="tel"
                     name="contact_phone"
                     placeholder="021-12345678"
+                    autoComplete="off"
                     className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -493,7 +512,7 @@ export function InstitutionManager({
               </button>
             </div>
 
-            <form onSubmit={handleUpdateSubmit} className="space-y-4">
+            <form onSubmit={handleUpdateSubmit} autoComplete="off" className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
                   Nama Institusi <span className="text-red-500">*</span>
@@ -504,6 +523,7 @@ export function InstitutionManager({
                   required
                   defaultValue={editingItem.name}
                   placeholder="Contoh: SMKN 1 Jakarta"
+                  autoComplete="off"
                   className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -535,6 +555,7 @@ export function InstitutionManager({
                   rows={2}
                   defaultValue={editingItem.address || ''}
                   placeholder="Alamat kampus atau sekolah..."
+                  autoComplete="off"
                   className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -549,6 +570,7 @@ export function InstitutionManager({
                     name="contact_email"
                     defaultValue={editingItem.contact_email || ''}
                     placeholder="email@institusi.ac.id"
+                    autoComplete="off"
                     className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -562,6 +584,7 @@ export function InstitutionManager({
                     name="contact_phone"
                     defaultValue={editingItem.contact_phone || ''}
                     placeholder="021-12345678"
+                    autoComplete="off"
                     className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   />
                 </div>

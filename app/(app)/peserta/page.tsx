@@ -12,6 +12,7 @@ export default async function PesertaPage({
     status?: string
     pos?: string
     inst?: string
+    success?: string
   }>
 }) {
   const params = await searchParams
@@ -170,6 +171,18 @@ export default async function PesertaPage({
 
   return (
     <div className="space-y-6">
+      {/* Toast Notifikasi Sukses Hapus */}
+      {params.success === 'deleted' && (
+        <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-medium text-green-800 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <span>Peserta berhasil dihapus.</span>
+          </div>
+        </div>
+      )}
+
       {/* Header Halaman */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -205,6 +218,7 @@ export default async function PesertaPage({
               name="q"
               defaultValue={query}
               placeholder="Cari nama peserta, email, institusi, jurusan..."
+              autoComplete="off"
               className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             />
           </div>

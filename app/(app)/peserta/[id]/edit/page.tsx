@@ -48,6 +48,7 @@ export default async function EditPesertaPage({
   const [
     { data: appsData },
     { data: appDetailsData },
+    { data: participantsCountData },
     { data: majorsData },
     { data: positionsData },
     { data: statusesData },
@@ -74,10 +75,11 @@ export default async function EditPesertaPage({
         requested_position_id,
         requested_quota,
         approved_quota,
-        major:majors!major_id ( id, name ),
+        major:majors!major_id ( id, name, code ),
         position:positions!requested_position_id ( id, name )
       `
       ),
+    supabase.from('participants').select('id, application_detail_id'),
     supabase.from('majors').select('id, name, code').order('name'),
     supabase.from('positions').select('id, name').order('name'),
     supabase
@@ -87,7 +89,22 @@ export default async function EditPesertaPage({
   ])
 
   const applications: ApplicationOption[] = (appsData as unknown as ApplicationOption[]) || []
-  const applicationDetails = (appDetailsData as any[]) || []
+
+  // Hitung jumlah peserta yang sudah terdaftar pada setiap application_detail
+  const participantCountByDetail = new Map<string, number>()
+  for (const p of participantsCountData || []) {
+    if (p.application_detail_id) {
+      participantCountByDetail.set(
+        p.application_detail_id,
+        (participantCountByDetail.get(p.application_detail_id) || 0) + 1
+      )
+    }
+  }
+
+  const applicationDetails = (appDetailsData || []).map((det: any) => ({
+    ...det,
+    current_count: participantCountByDetail.get(det.id) || 0,
+  }))
   const majors: Major[] = majorsData || []
   const positions: Position[] = positionsData || []
   const statuses: InternshipStatus[] = statusesData || []

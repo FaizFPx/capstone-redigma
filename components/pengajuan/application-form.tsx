@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { DateInput } from '@/components/ui/date-input'
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes'
 import type {
   ApplicationItem,
   Institution,
@@ -19,6 +20,7 @@ import {
   updateApplicationAction,
   type ActionResponse,
 } from '@/app/(app)/pengajuan/actions'
+import { INSTITUTION_TYPES } from '@/lib/constants/institution'
 
 interface FormDetailRow {
   major_id: string
@@ -56,7 +58,7 @@ export function ApplicationForm({
     initialData?.application_type || 'PKL'
   )
   const [selectedInstId, setSelectedInstId] = useState<string>(
-    initialData?.institution_id || (institutions.length > 0 ? institutions[0].id : 'NEW')
+    initialData?.institution_id || ''
   )
   const [isNewInst, setIsNewInst] = useState<boolean>(
     !initialData && institutions.length === 0
@@ -77,7 +79,7 @@ export function ApplicationForm({
         }))
       : [
           {
-            major_id: majors.length > 0 ? majors[0].id : '',
+            major_id: '',
             new_major_name: '',
             requested_position_id: '',
             new_position_name: '',
@@ -90,16 +92,24 @@ export function ApplicationForm({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+  const [isDirty, setIsDirty] = useState<boolean>(false)
+
+  const { markClean, DialogElement } = useUnsavedChangesGuard({
+    isDirty,
+    fallbackBackUrl:
+      isEdit && initialData ? `/pengajuan/${initialData.id}` : '/pengajuan',
+  })
 
   // Tanggal default hari ini jika baru
   const defaultApplyDate =
     initialData?.apply_date || new Date().toISOString().split('T')[0]
 
   const handleAddDetail = () => {
+    setIsDirty(true)
     setDetails((prev) => [
       ...prev,
       {
-        major_id: majors.length > 0 ? majors[0].id : '',
+        major_id: '',
         new_major_name: '',
         requested_position_id: '',
         new_position_name: '',
@@ -111,6 +121,7 @@ export function ApplicationForm({
   }
 
   const handleRemoveDetail = (index: number) => {
+    setIsDirty(true)
     setDetails((prev) => prev.filter((_, i) => i !== index))
   }
 
@@ -119,6 +130,7 @@ export function ApplicationForm({
     field: keyof FormDetailRow,
     value: string | number
   ) => {
+    setIsDirty(true)
     setDetails((prev) => {
       const next = [...prev]
       next[index] = { ...next[index], [field]: value }
@@ -128,6 +140,32 @@ export function ApplicationForm({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (isSubmitting) return
+
+    // Validasi institusi pendidikan
+    if (!isNewInst && !selectedInstId) {
+      setErrorMessage('Institusi pendidikan wajib dipilih.')
+      return
+    }
+    if (isNewInst && !newInstName.trim()) {
+      setErrorMessage('Nama institusi baru wajib diisi.')
+      return
+    }
+
+    // Validasi jurusan pada setiap rincian
+    for (let i = 0; i < details.length; i++) {
+      const d = details[i]
+      const hasMajor = d.major_id && d.major_id !== 'NEW' && d.major_id.trim() !== ''
+      const hasNewMajor = d.major_id === 'NEW' && d.new_major_name && d.new_major_name.trim().length > 0
+
+      if (!hasMajor && !hasNewMajor) {
+        setErrorMessage(
+          `Jurusan pada Rincian #${i + 1} wajib dipilih. Silakan pilih jurusan dari daftar atau tambahkan jurusan baru.`
+        )
+        return
+      }
+    }
+
     setIsSubmitting(true)
     setErrorMessage(null)
 
@@ -146,9 +184,11 @@ export function ApplicationForm({
         setErrorMessage(res.error)
         setIsSubmitting(false)
       } else if (res?.id) {
+        markClean()
         router.push(`/pengajuan/${res.id}?success=${isEdit ? 'updated' : 'created'}`)
         router.refresh()
       } else {
+        markClean()
         router.push('/pengajuan')
         router.refresh()
       }
@@ -160,6 +200,7 @@ export function ApplicationForm({
         typeof (err as { digest: string }).digest === 'string' &&
         (err as { digest: string }).digest.startsWith('NEXT_REDIRECT')
       ) {
+        markClean()
         throw err
       }
       setErrorMessage(
@@ -170,7 +211,13 @@ export function ApplicationForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form
+      onSubmit={handleSubmit}
+      onChange={() => setIsDirty(true)}
+      onInput={() => setIsDirty(true)}
+      autoComplete="off"
+      className="space-y-8"
+    >
       {errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           <strong>Perhatian:</strong> {errorMessage}
@@ -233,6 +280,7 @@ export function ApplicationForm({
                     value={newInstName}
                     onChange={(e) => setNewInstName(e.target.value)}
                     placeholder="Nama Sekolah / Universitas baru..."
+                    autoComplete="off"
                     className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                     required
                   />
@@ -244,11 +292,11 @@ export function ApplicationForm({
                     onChange={(e) => setNewInstType(e.target.value)}
                     className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   >
-                    <option value="SMK">SMK</option>
-                    <option value="UNIVERSITAS">Universitas</option>
-                    <option value="POLITEKNIK">Politeknik</option>
-                    <option value="PESANTREN">Pesantren</option>
-                    <option value="LAINNYA">Lainnya</option>
+                    {INSTITUTION_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -263,11 +311,14 @@ export function ApplicationForm({
                 {institutions.length === 0 ? (
                   <option value="NEW">Belum ada institusi (Gunakan opsi Tambah)</option>
                 ) : (
-                  institutions.map((inst) => (
-                    <option key={inst.id} value={inst.id}>
-                      {inst.name} ({inst.type})
-                    </option>
-                  ))
+                  <>
+                    <option value="">-- Pilih Institusi --</option>
+                    {institutions.map((inst) => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.name} ({inst.type})
+                      </option>
+                    ))}
+                  </>
                 )}
               </select>
             )}
@@ -315,6 +366,7 @@ export function ApplicationForm({
               name="kop_letter_number"
               defaultValue={initialData?.kop_letter_number || ''}
               placeholder="Contoh: 421.5/028/SMK/2026"
+              autoComplete="off"
               className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             />
           </div>
@@ -461,6 +513,7 @@ export function ApplicationForm({
             rows={3}
             defaultValue={initialData?.notes || ''}
             placeholder="Tambahkan keterangan atau instruksi khusus dari pihak sekolah / pendaftar..."
+            autoComplete="off"
             className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
           />
         </div>
@@ -525,6 +578,7 @@ export function ApplicationForm({
                         onChange={(e) =>
                           handleDetailChange(idx, 'new_major_name', e.target.value)
                         }
+                        autoComplete="off"
                         className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
                       />
                       <button
@@ -570,6 +624,7 @@ export function ApplicationForm({
                         onChange={(e) =>
                           handleDetailChange(idx, 'new_position_name', e.target.value)
                         }
+                        autoComplete="off"
                         className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
                       />
                       <button
@@ -616,6 +671,7 @@ export function ApplicationForm({
                     onChange={(e) =>
                       handleDetailChange(idx, 'requested_quota', e.target.value)
                     }
+                    autoComplete="off"
                     className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -633,6 +689,7 @@ export function ApplicationForm({
                     onChange={(e) =>
                       handleDetailChange(idx, 'approved_quota', e.target.value)
                     }
+                    autoComplete="off"
                     className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -645,6 +702,7 @@ export function ApplicationForm({
                   placeholder="Catatan khusus rincian ini (opsional)..."
                   value={row.notes}
                   onChange={(e) => handleDetailChange(idx, 'notes', e.target.value)}
+                  autoComplete="off"
                   className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -694,6 +752,7 @@ export function ApplicationForm({
           )}
         </button>
       </div>
+      {DialogElement}
     </form>
   )
 }

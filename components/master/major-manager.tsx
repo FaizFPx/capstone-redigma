@@ -199,6 +199,7 @@ export function MajorManager({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari nama jurusan atau kode..."
+              autoComplete="off"
               className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             />
             {search && (
@@ -408,7 +409,7 @@ export function MajorManager({
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
+            <form onSubmit={handleCreateSubmit} autoComplete="off" className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
                   Nama Jurusan / Program Studi <span className="text-red-500">*</span>
@@ -418,6 +419,7 @@ export function MajorManager({
                   name="name"
                   required
                   placeholder="Contoh: Rekayasa Perangkat Lunak atau Teknik Informatika"
+                  autoComplete="off"
                   className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -431,6 +433,7 @@ export function MajorManager({
                     type="text"
                     name="code"
                     placeholder="Contoh: RPL, TKJ, TI"
+                    autoComplete="off"
                     className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -508,7 +511,7 @@ export function MajorManager({
               </button>
             </div>
 
-            <form onSubmit={handleUpdateSubmit} className="space-y-4">
+            <form onSubmit={handleUpdateSubmit} autoComplete="off" className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
                   Nama Jurusan / Program Studi <span className="text-red-500">*</span>
@@ -519,6 +522,7 @@ export function MajorManager({
                   required
                   defaultValue={editingItem.name}
                   placeholder="Contoh: Rekayasa Perangkat Lunak"
+                  autoComplete="off"
                   className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -533,6 +537,7 @@ export function MajorManager({
                     name="code"
                     defaultValue={editingItem.code || ''}
                     placeholder="Contoh: RPL"
+                    autoComplete="off"
                     className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   />
                 </div>

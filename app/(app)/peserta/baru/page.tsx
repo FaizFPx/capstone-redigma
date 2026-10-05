@@ -4,13 +4,22 @@ import { ParticipantForm } from '@/components/peserta/participant-form'
 import type { InternshipStatus, ApplicationOption } from '../types'
 import type { Major, Position } from '../../pengajuan/types'
 
-export default async function TambahPesertaPage() {
+export default async function TambahPesertaPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ application_id?: string; app_id?: string }>
+}) {
+  const resolvedParams = searchParams ? await searchParams : {}
+  const targetApplicationId =
+    resolvedParams.application_id || resolvedParams.app_id || ''
+
   const supabase = await createClient()
 
   // Ambil data referensi pendukung untuk form
   const [
     { data: appsData },
     { data: appDetailsData },
+    { data: participantsCountData },
     { data: majorsData },
     { data: positionsData },
     { data: statusesData },
@@ -37,10 +46,11 @@ export default async function TambahPesertaPage() {
         requested_position_id,
         requested_quota,
         approved_quota,
-        major:majors!major_id ( id, name ),
+        major:majors!major_id ( id, name, code ),
         position:positions!requested_position_id ( id, name )
       `
       ),
+    supabase.from('participants').select('id, application_detail_id'),
     supabase.from('majors').select('id, name, code').order('name'),
     supabase.from('positions').select('id, name').order('name'),
     supabase
@@ -50,7 +60,22 @@ export default async function TambahPesertaPage() {
   ])
 
   const applications: ApplicationOption[] = (appsData as unknown as ApplicationOption[]) || []
-  const applicationDetails = (appDetailsData as any[]) || []
+
+  // Hitung jumlah peserta yang sudah terdaftar pada setiap application_detail
+  const participantCountByDetail = new Map<string, number>()
+  for (const p of participantsCountData || []) {
+    if (p.application_detail_id) {
+      participantCountByDetail.set(
+        p.application_detail_id,
+        (participantCountByDetail.get(p.application_detail_id) || 0) + 1
+      )
+    }
+  }
+
+  const applicationDetails = (appDetailsData || []).map((det: any) => ({
+    ...det,
+    current_count: participantCountByDetail.get(det.id) || 0,
+  }))
   const majors: Major[] = majorsData || []
   const positions: Position[] = positionsData || []
   const statuses: InternshipStatus[] = statusesData || []
@@ -77,6 +102,7 @@ export default async function TambahPesertaPage() {
       </div>
 
       <ParticipantForm
+        defaultApplicationId={targetApplicationId}
         applications={applications}
         applicationDetails={applicationDetails}
         majors={majors}

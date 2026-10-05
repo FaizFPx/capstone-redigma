@@ -204,6 +204,7 @@ export function DateInput({
           maxLength={10}
           disabled={disabled}
           required={required}
+          autoComplete="off"
           className={`block w-full rounded-lg border bg-white py-2 pl-3 pr-10 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:bg-gray-50 disabled:text-gray-500 transition-colors ${
             activeError
               ? 'border-red-400 text-red-900 focus:border-red-500 focus:ring-red-400/20'

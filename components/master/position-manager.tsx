@@ -212,6 +212,7 @@ export function PositionManager({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari nama posisi magang..."
+              autoComplete="off"
               className="block w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
             {search && (
@@ -473,7 +474,7 @@ export function PositionManager({
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="mt-5 space-y-4">
+            <form onSubmit={handleCreateSubmit} autoComplete="off" className="mt-5 space-y-4">
               {/* Nama Posisi */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
@@ -484,6 +485,7 @@ export function PositionManager({
                   name="name"
                   required
                   placeholder="Contoh: Web Developer, UI/UX Designer"
+                  autoComplete="off"
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 <p className="mt-1 text-xs text-gray-500">
@@ -544,7 +546,7 @@ export function PositionManager({
               </button>
             </div>
 
-            <form onSubmit={handleEditSubmit} className="mt-5 space-y-4">
+            <form onSubmit={handleEditSubmit} autoComplete="off" className="mt-5 space-y-4">
               {/* ID info (Read-only) */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400">
@@ -569,6 +571,7 @@ export function PositionManager({
                   required
                   defaultValue={editingItem.name}
                   placeholder="Contoh: Web Developer, Technical Writer"
+                  autoComplete="off"
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>

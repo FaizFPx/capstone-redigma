@@ -519,6 +519,7 @@ export default async function MonitoringPage({
               name="q"
               defaultValue={query}
               placeholder="Cari institusi, nomor KOP, nama peserta..."
+              autoComplete="off"
               className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             />
           </div>

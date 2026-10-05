@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatDateTime } from '@/lib/utils/date'
+import { DeleteParticipantButton } from '@/components/peserta/delete-participant-button'
 import type { ParticipantItem } from '../types'
 
 export default async function DetailPesertaPage({
@@ -176,6 +177,25 @@ export default async function DetailPesertaPage({
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <Link
+            href={
+              p.application_id
+                ? `/peserta/baru?application_id=${p.application_id}`
+                : '/peserta/baru'
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Tambah Peserta Lagi</span>
+          </Link>
+          <Link
             href={`/peserta/${p.id}/edit`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-xs hover:bg-gray-50 transition-colors"
           >
@@ -184,6 +204,7 @@ export default async function DetailPesertaPage({
             </svg>
             Edit Peserta
           </Link>
+          <DeleteParticipantButton participantId={p.id} participantName={p.name} />
         </div>
       </div>
 

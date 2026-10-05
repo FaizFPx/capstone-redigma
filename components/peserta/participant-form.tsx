@@ -2,8 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { DateInput } from '@/components/ui/date-input'
 import { isValidDateRange } from '@/lib/utils/date'
+import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes'
 import type {
   ParticipantItem,
   InternshipStatus,
@@ -24,12 +26,14 @@ interface ApplicationDetailOption {
   requested_quota?: number | null
   approved_quota?: number | null
   notes?: string | null
-  major?: { id: string; name: string } | null
+  major?: { id: string; name: string; code?: string | null } | null
   position?: { id: string; name: string } | null
+  current_count?: number
 }
 
 interface ParticipantFormProps {
   initialData?: ParticipantItem | null
+  defaultApplicationId?: string
   applications: ApplicationOption[]
   applicationDetails?: ApplicationDetailOption[]
   majors: Major[]
@@ -40,6 +44,7 @@ interface ParticipantFormProps {
 
 export function ParticipantForm({
   initialData,
+  defaultApplicationId,
   applications,
   applicationDetails = [],
   majors,
@@ -47,9 +52,24 @@ export function ParticipantForm({
   statuses,
   isEdit = false,
 }: ParticipantFormProps) {
-  const [selectedAppId, setSelectedAppId] = useState<string>(
-    initialData?.application_id || (applications.length > 0 ? applications[0].id : '')
-  )
+  const router = useRouter()
+  const [isDirty, setIsDirty] = useState<boolean>(false)
+
+  const { markClean, DialogElement } = useUnsavedChangesGuard({
+    isDirty,
+    fallbackBackUrl:
+      isEdit && initialData ? `/peserta/${initialData.id}` : '/peserta',
+  })
+
+  const initialAppId =
+    initialData?.application_id ||
+    (defaultApplicationId && applications.some((a) => a.id === defaultApplicationId)
+      ? defaultApplicationId
+      : applications.length > 0
+      ? applications[0].id
+      : '')
+
+  const [selectedAppId, setSelectedAppId] = useState<string>(initialAppId)
   const [selectedDetailId, setSelectedDetailId] = useState<string>(
     initialData?.application_detail_id || ''
   )
@@ -79,8 +99,53 @@ export function ParticipantForm({
     return applicationDetails.filter((d) => d.application_id === selectedAppId)
   }, [selectedAppId, applicationDetails])
 
+  // Rincian pengajuan yang sedang dipilih oleh user
+  const selectedDetail = useMemo(() => {
+    if (!selectedDetailId) return null
+    return availableDetails.find((d) => d.id === selectedDetailId) || null
+  }, [selectedDetailId, availableDetails])
+
+  // Hitung status kuota untuk rincian yang dipilih
+  const selectedQuotaInfo = useMemo(() => {
+    if (!selectedDetail) return null
+
+    const approvedQuota =
+      typeof selectedDetail.approved_quota === 'number'
+        ? selectedDetail.approved_quota
+        : null
+    const currentCount = selectedDetail.current_count ?? 0
+
+    // Pada mode edit: jika peserta ini sudah terdaftar pada detail ini sebelumnya,
+    // maka slotnya sudah termasuk dalam currentCount, sehingga tidak mengurangi slot lagi
+    const isCurrentParticipantDetail =
+      isEdit && initialData?.application_detail_id === selectedDetail.id
+
+    const effectiveCount = isCurrentParticipantDetail
+      ? Math.max(0, currentCount - 1)
+      : currentCount
+
+    const isQuotaCapped = approvedQuota !== null
+    const available = isQuotaCapped
+      ? Math.max(0, approvedQuota - effectiveCount)
+      : null
+    const isFull = isQuotaCapped && available !== null && available <= 0
+
+    return {
+      approvedQuota,
+      currentCount,
+      effectiveCount,
+      available,
+      isQuotaCapped,
+      isFull,
+      isCurrentParticipantDetail,
+    }
+  }, [selectedDetail, isEdit, initialData?.application_detail_id])
+
+  const isSubmitBlocked = selectedQuotaInfo?.isFull === true
+
   // Saat detail pengajuan dipilih, otomatis bantu isi jurusan & posisi jika belum ada
   const handleDetailSelect = (detailId: string) => {
+    setIsDirty(true)
     setSelectedDetailId(detailId)
     if (!detailId) return
 
@@ -99,6 +164,16 @@ export function ParticipantForm({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (isSubmitting) return
+
+    // Validasi kuota di client-side
+    if (selectedQuotaInfo?.isFull) {
+      setErrorMessage(
+        `Kuota untuk rincian ini sudah penuh (${selectedQuotaInfo.approvedQuota}/${selectedQuotaInfo.approvedQuota}). Peserta tidak dapat ditambahkan ke rincian ini.`
+      )
+      return
+    }
+
     setIsSubmitting(true)
     setErrorMessage(null)
 
@@ -126,6 +201,18 @@ export function ParticipantForm({
       if (res?.error) {
         setErrorMessage(res.error)
         setIsSubmitting(false)
+      } else if (res?.success) {
+        markClean()
+        if (isEdit && initialData) {
+          router.push(`/peserta/${initialData.id}?success=updated`)
+        } else {
+          router.push(`/peserta/${res.id || ''}?success=created`)
+        }
+        router.refresh()
+      } else {
+        markClean()
+        router.push('/peserta')
+        router.refresh()
       }
     } catch (err: unknown) {
       if (
@@ -135,6 +222,7 @@ export function ParticipantForm({
         typeof (err as { digest: string }).digest === 'string' &&
         (err as { digest: string }).digest.startsWith('NEXT_REDIRECT')
       ) {
+        markClean()
         throw err
       }
       setErrorMessage(
@@ -145,7 +233,13 @@ export function ParticipantForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form
+      onSubmit={handleSubmit}
+      onChange={() => setIsDirty(true)}
+      onInput={() => setIsDirty(true)}
+      autoComplete="off"
+      className="space-y-8"
+    >
       {errorMessage && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           <strong>Perhatian:</strong> {errorMessage}
@@ -173,6 +267,7 @@ export function ParticipantForm({
               defaultValue={initialData?.name || ''}
               placeholder="Contoh: Muhammad Rizki Pratama"
               required
+              autoComplete="off"
               className="mt-2 block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             />
           </div>
@@ -187,6 +282,7 @@ export function ParticipantForm({
               name="email"
               defaultValue={initialData?.email || ''}
               placeholder="nama@email.com"
+              autoComplete="off"
               className="mt-2 block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             />
           </div>
@@ -201,6 +297,7 @@ export function ParticipantForm({
               name="phone"
               defaultValue={initialData?.phone || ''}
               placeholder="081234567890"
+              autoComplete="off"
               className="mt-2 block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             />
           </div>
@@ -257,15 +354,150 @@ export function ParticipantForm({
                 name="application_detail_id"
                 value={selectedDetailId}
                 onChange={(e) => handleDetailSelect(e.target.value)}
-                className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                className={`mt-2 block w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:outline-hidden ${
+                  selectedQuotaInfo?.isFull
+                    ? 'border-red-400 focus:border-red-500'
+                    : 'border-gray-300 focus:border-blue-500'
+                }`}
               >
                 <option value="">-- Tanpa Rincian Spesifik --</option>
-                {availableDetails.map((det) => (
-                  <option key={det.id} value={det.id}>
-                    Jurusan: {det.major?.name || 'Umum'} &bull; Posisi: {det.position?.name || 'Tidak ditentukan'} &bull; Kuota: {det.approved_quota || det.requested_quota || '-'}
-                  </option>
-                ))}
+                {availableDetails.map((det) => {
+                  const approvedQuota =
+                    typeof det.approved_quota === 'number'
+                      ? det.approved_quota
+                      : null
+                  const currentCount = det.current_count ?? 0
+                  const isCurrentParticipantDetail =
+                    isEdit && initialData?.application_detail_id === det.id
+                  const effectiveCount = isCurrentParticipantDetail
+                    ? Math.max(0, currentCount - 1)
+                    : currentCount
+                  const isQuotaCapped = approvedQuota !== null
+                  const available = isQuotaCapped
+                    ? Math.max(0, approvedQuota - effectiveCount)
+                    : null
+                  const isFull =
+                    isQuotaCapped && available !== null && available <= 0
+
+                  let quotaLabel = ''
+                  if (isQuotaCapped) {
+                    quotaLabel = ` \u2022 Kuota: ${approvedQuota} (Terdaftar: ${currentCount}, Sisa: ${available})${
+                      isFull ? ' [PENUH]' : ''
+                    }`
+                  } else if (det.requested_quota) {
+                    quotaLabel = ` \u2022 Kuota: ${det.requested_quota}`
+                  }
+
+                  return (
+                    <option key={det.id} value={det.id}>
+                      Jurusan: {det.major?.name || 'Umum'} &bull; Posisi:{' '}
+                      {det.position?.name || 'Tidak ditentukan'}
+                      {quotaLabel}
+                    </option>
+                  )
+                })}
               </select>
+
+              {/* Tampilan Informasi Kuota & Peringatan Jika Penuh */}
+              {selectedDetail && selectedQuotaInfo && (
+                <div
+                  className={`mt-3 rounded-xl border p-4 transition-all ${
+                    selectedQuotaInfo.isFull
+                      ? 'border-red-200 bg-red-50/70'
+                      : 'border-blue-100 bg-blue-50/40'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex h-2.5 w-2.5 rounded-full ${
+                          selectedQuotaInfo.isFull ? 'bg-red-500' : 'bg-blue-600'
+                        }`}
+                      />
+                      <span className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                        Informasi Kuota Rincian Pengajuan
+                      </span>
+                    </div>
+                    {selectedQuotaInfo.isQuotaCapped && (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          selectedQuotaInfo.isFull
+                            ? 'bg-red-100 text-red-700 border border-red-200'
+                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        }`}
+                      >
+                        {selectedQuotaInfo.isFull ? 'Kuota Penuh' : 'Kuota Tersedia'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                      <span className="text-gray-400 block font-medium">Jurusan</span>
+                      <span className="font-semibold text-gray-800 text-sm truncate block mt-0.5">
+                        {selectedDetail.major?.name || 'Umum'}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                      <span className="text-gray-400 block font-medium">Kuota</span>
+                      <span className="font-bold text-gray-900 text-sm block mt-0.5">
+                        {selectedQuotaInfo.approvedQuota !== null
+                          ? selectedQuotaInfo.approvedQuota
+                          : '-'}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                      <span className="text-gray-400 block font-medium">Terdaftar</span>
+                      <span className="font-bold text-gray-900 text-sm block mt-0.5">
+                        {selectedQuotaInfo.currentCount}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                      <span className="text-gray-400 block font-medium">Sisa</span>
+                      <span
+                        className={`font-bold text-sm block mt-0.5 ${
+                          selectedQuotaInfo.isFull
+                            ? 'text-red-600 font-extrabold'
+                            : 'text-emerald-600'
+                        }`}
+                      >
+                        {selectedQuotaInfo.available !== null
+                          ? selectedQuotaInfo.available
+                          : '-'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedQuotaInfo.isFull && (
+                    <div className="mt-3 rounded-lg bg-red-100/90 p-3 border border-red-200 text-xs text-red-800 flex items-start gap-2.5">
+                      <svg
+                        className="h-4 w-4 shrink-0 text-red-600 mt-0.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                        />
+                      </svg>
+                      <div>
+                        <strong className="font-bold">Kuota untuk rincian ini sudah penuh.</strong>
+                        <p className="mt-0.5 text-red-700 leading-relaxed">
+                          Kuota peserta untuk rincian{' '}
+                          {selectedDetail.major?.name || 'ini'} sudah mencapai
+                          batas maksimal ({selectedQuotaInfo.approvedQuota}/
+                          {selectedQuotaInfo.approvedQuota}). Peserta tidak
+                          dapat ditambahkan ke rincian ini. Silakan pilih
+                          rincian lain yang masih memiliki kuota.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -406,37 +638,46 @@ export function ParticipantForm({
             rows={3}
             defaultValue={initialData?.notes || ''}
             placeholder="Catatan administratif operasional terkait peserta ini (bukan penilaian kinerja)..."
+            autoComplete="off"
             className="mt-2 block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
           />
         </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center justify-end gap-3 pt-2">
-        <Link
-          href={isEdit && initialData ? `/peserta/${initialData.id}` : '/peserta'}
-          className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          Batal
-        </Link>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 focus:outline-hidden disabled:opacity-50 transition-colors"
-        >
-          {isSubmitting ? (
-            <>
-              <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-              <span>Menyimpan...</span>
-            </>
-          ) : (
-            <span>{isEdit ? 'Simpan Perubahan' : 'Daftarkan Peserta'}</span>
-          )}
-        </button>
+      <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 pt-2">
+        {isSubmitBlocked && (
+          <p className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">
+            Kuota untuk rincian ini sudah penuh.
+          </p>
+        )}
+        <div className="flex items-center gap-3">
+          <Link
+            href={isEdit && initialData ? `/peserta/${initialData.id}` : '/peserta'}
+            className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Batal
+          </Link>
+          <button
+            type="submit"
+            disabled={isSubmitting || isSubmitBlocked}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 focus:outline-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSubmitting ? (
+              <>
+                <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span>Menyimpan...</span>
+              </>
+            ) : (
+              <span>{isEdit ? 'Simpan Perubahan' : 'Daftarkan Peserta'}</span>
+            )}
+          </button>
+        </div>
       </div>
+      {DialogElement}
     </form>
   )
 }
