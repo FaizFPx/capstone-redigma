@@ -9,23 +9,35 @@ export default async function LoginPage({
   const params = await searchParams
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-8">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
-        {/* Brand Header with Wordmark Logo */}
-        <div className="mb-6 flex items-center justify-center rounded-xl bg-slate-900 px-6 py-4">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-slate-100 to-blue-50/40 px-4 py-8">
+      {/* Decorative ambient background glows */}
+      <div
+        className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-[#07569d]/10 blur-3xl"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-blue-400/10 blur-3xl"
+        aria-hidden="true"
+      />
+
+      <div className="relative w-full max-w-md rounded-2xl border border-slate-200/80 bg-white/95 p-8 shadow-xl shadow-slate-200/50 backdrop-blur-xs">
+        {/* Brand Header with Title Logo */}
+        <div className="mb-6 flex items-center justify-center rounded-2xl bg-gradient-to-r from-[#06447e] via-[#07569d] to-[#0a66ba] px-4 py-2.5 shadow-lg shadow-[#07569d]/20 ring-1 ring-white/10">
           <Image
-            src="/img/wordmark-white-yellow.png"
+            src="/img/title2.png"
             alt="REDIGMA"
-            width={160}
-            height={44}
-            className="h-9 w-auto object-contain"
+            width={270}
+            height={74}
+            className="h-20 w-auto object-contain translate-y-1 drop-shadow-xs"
             priority
           />
         </div>
 
         <div className="text-center">
-          <h1 className="text-xl font-bold text-gray-900">Portal Human Capital</h1>
-          <p className="mt-1 text-xs text-gray-500">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            Portal Human Capital
+          </h1>
+          <p className="mt-1 text-xs text-slate-500">
             Sistem Informasi Pengajuan & Pemantauan Magang
           </p>
         </div>
@@ -53,7 +65,7 @@ export default async function LoginPage({
           <div>
             <label
               htmlFor="email"
-              className="block text-xs font-semibold uppercase tracking-wider text-gray-700"
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-700"
             >
               Email Petugas
             </label>
@@ -63,14 +75,14 @@ export default async function LoginPage({
               type="email"
               placeholder="nama@redigma.id"
               required
-              className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-all focus:border-[#07569d] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#07569d]/20"
             />
           </div>
 
           <div>
             <label
               htmlFor="password"
-              className="block text-xs font-semibold uppercase tracking-wider text-gray-700"
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-700"
             >
               Password
             </label>
@@ -80,19 +92,19 @@ export default async function LoginPage({
               type="password"
               placeholder="••••••••"
               required
-              className="mt-1.5 w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 transition-all focus:border-[#07569d] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#07569d]/20"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
+            className="w-full rounded-xl bg-gradient-to-r from-[#07569d] to-[#0a66ba] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[#07569d]/25 transition-all duration-200 hover:from-[#064680] hover:to-[#07569d] hover:shadow-lg hover:shadow-[#07569d]/35 active:scale-[0.99] cursor-pointer"
           >
             Masuk ke Sistem
           </button>
         </form>
 
-        <div className="mt-6 text-center text-xs text-gray-400">
+        <div className="mt-6 text-center text-xs text-slate-400">
           REDIGMA &bull; Human Capital Magang Capstone
         </div>
       </div>

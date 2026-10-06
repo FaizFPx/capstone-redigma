@@ -80,8 +80,16 @@ export interface RecentParticipantItem {
 export interface ActiveInternItem {
   id: string
   name: string
+  email?: string | null
+  phone?: string | null
   institutionName: string | null
+  applicationType?: string | null
   majorName: string | null
   positionName: string | null
+  requestedPositionName?: string | null
+  actual_start_date?: string | null
   actual_end_date: string | null
+  status_id?: string
+  status_name?: string
 }
+

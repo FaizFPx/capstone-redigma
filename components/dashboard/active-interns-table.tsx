@@ -2,22 +2,89 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils/date'
+import {
+  formatDate,
+  calculateRemainingDays,
+  getRemainingDaysInfo,
+  matchesRemainingDaysFilter,
+} from '@/lib/utils/date'
 import type { ActiveInternItem } from '@/app/(app)/dashboard/types'
 
 interface ActiveInternsTableProps {
   items: ActiveInternItem[]
   total?: number
+  title?: string
+  subtitle?: string
 }
 
 const ITEMS_PER_PAGE = 10
 
-export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
+function RemainingBadge({ date }: { date?: string | null }) {
+  const days = calculateRemainingDays(date)
+  const { text, urgency } = getRemainingDaysInfo(days)
+
+  if (urgency === 'NONE') {
+    return <span className="text-gray-400 font-medium">-</span>
+  }
+
+  if (urgency === 'NORMAL') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+        {text}
+      </span>
+    )
+  }
+
+  if (urgency === 'WARNING_LOW') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 border border-amber-200">
+        {text}
+      </span>
+    )
+  }
+
+  if (urgency === 'WARNING_HIGH') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-semibold text-orange-700 border border-orange-200">
+        {text}
+      </span>
+    )
+  }
+
+  if (urgency === 'TODAY') {
+    return (
+      <span
+        className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700 border border-red-200"
+        title="Berakhir hari ini"
+      >
+        <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+        {text}
+      </span>
+    )
+  }
+
+  // OVERDUE (< 0 hari)
+  return (
+    <span
+      className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 border border-gray-200"
+      title="Sudah berakhir"
+    >
+      {text}
+    </span>
+  )
+}
+
+export function ActiveInternsTable({
+  items,
+  title = 'Peserta yang Sedang Magang',
+  subtitle = 'Daftar peserta yang saat ini sedang menjalani program magang di REDIGMA.',
+}: ActiveInternsTableProps) {
   // State Filter
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [selectedInstitution, setSelectedInstitution] = useState<string>('ALL')
   const [selectedMajor, setSelectedMajor] = useState<string>('ALL')
   const [selectedPosition, setSelectedPosition] = useState<string>('ALL')
+  const [selectedRemaining, setSelectedRemaining] = useState<string>('ALL')
 
   // State Pagination
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -58,16 +125,27 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
     searchQuery.trim() !== '' ||
     selectedInstitution !== 'ALL' ||
     selectedMajor !== 'ALL' ||
-    selectedPosition !== 'ALL'
+    selectedPosition !== 'ALL' ||
+    selectedRemaining !== 'ALL'
 
   // Filter Data Peserta Aktif
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      // 1. Search Nama Peserta (case-insensitive)
+      // 1. Search Nama Peserta & Kontak (case-insensitive)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim()
         const matchName = item.name.toLowerCase().includes(q)
-        if (!matchName) return false
+        const matchEmail = item.email ? item.email.toLowerCase().includes(q) : false
+        const matchPhone = item.phone ? item.phone.includes(q) : false
+        const matchInst = item.institutionName
+          ? item.institutionName.toLowerCase().includes(q)
+          : false
+        const matchMajor = item.majorName
+          ? item.majorName.toLowerCase().includes(q)
+          : false
+        if (!matchName && !matchEmail && !matchPhone && !matchInst && !matchMajor) {
+          return false
+        }
       }
 
       // 2. Filter Institusi
@@ -82,12 +160,32 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
 
       // 4. Filter Posisi Penugasan
       if (selectedPosition !== 'ALL') {
-        if (item.positionName !== selectedPosition) return false
+        if (
+          item.positionName !== selectedPosition &&
+          item.requestedPositionName !== selectedPosition
+        ) {
+          return false
+        }
+      }
+
+      // 5. Filter Sisa Magang
+      if (selectedRemaining !== 'ALL') {
+        const days = calculateRemainingDays(item.actual_end_date)
+        if (!matchesRemainingDaysFilter(days, selectedRemaining)) {
+          return false
+        }
       }
 
       return true
     })
-  }, [items, searchQuery, selectedInstitution, selectedMajor, selectedPosition])
+  }, [
+    items,
+    searchQuery,
+    selectedInstitution,
+    selectedMajor,
+    selectedPosition,
+    selectedRemaining,
+  ])
 
   // Handler Perubahan Filter (otomatis reset ke halaman 1)
   const handleSearchChange = (val: string) => {
@@ -110,11 +208,17 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
     setCurrentPage(1)
   }
 
+  const handleRemainingChange = (val: string) => {
+    setSelectedRemaining(val)
+    setCurrentPage(1)
+  }
+
   const handleReset = () => {
     setSearchQuery('')
     setSelectedInstitution('ALL')
     setSelectedMajor('ALL')
     setSelectedPosition('ALL')
+    setSelectedRemaining('ALL')
     setCurrentPage(1)
   }
 
@@ -137,15 +241,11 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-gray-100">
         <div>
-          <h2 className="text-base font-bold text-gray-900">
-            Peserta yang Sedang Magang
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Daftar peserta yang saat ini sedang menjalani program magang di REDIGMA.
-          </p>
+          <h2 className="text-base font-bold text-gray-900">{title}</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
         </div>
         <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/60 self-start sm:self-auto shrink-0">
-          Total: {totalFiltered} peserta
+          Sedang Magang: {totalFiltered} peserta
         </div>
       </div>
 
@@ -178,9 +278,9 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
         <div className="mt-4 space-y-4">
           {/* Area Filter */}
           <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-center">
               {/* 1. Search Nama Peserta */}
-              <div className="lg:col-span-4 relative">
+              <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                   <svg
                     className="h-4 w-4 text-gray-400"
@@ -206,7 +306,7 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
               </div>
 
               {/* 2. Filter Institusi */}
-              <div className="lg:col-span-2">
+              <div>
                 <select
                   value={selectedInstitution}
                   onChange={(e) => handleInstitutionChange(e.target.value)}
@@ -222,7 +322,7 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
               </div>
 
               {/* 3. Filter Jurusan */}
-              <div className="lg:col-span-2">
+              <div>
                 <select
                   value={selectedMajor}
                   onChange={(e) => handleMajorChange(e.target.value)}
@@ -238,7 +338,7 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
               </div>
 
               {/* 4. Filter Posisi Penugasan */}
-              <div className="lg:col-span-2">
+              <div>
                 <select
                   value={selectedPosition}
                   onChange={(e) => handlePositionChange(e.target.value)}
@@ -253,13 +353,29 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
                 </select>
               </div>
 
-              {/* 5. Tombol Reset Filter */}
-              <div className="lg:col-span-2 flex justify-start sm:justify-end">
+              {/* 5. Filter Sisa Magang */}
+              <div>
+                <select
+                  value={selectedRemaining}
+                  onChange={(e) => handleRemainingChange(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-hidden transition-colors"
+                >
+                  <option value="ALL">Semua</option>
+                  <option value="LE_7">&le; 7 hari</option>
+                  <option value="LE_14">&le; 14 hari</option>
+                  <option value="LE_30">&le; 30 hari</option>
+                  <option value="GT_30">&gt; 30 hari</option>
+                  <option value="OVERDUE">Sudah berakhir</option>
+                </select>
+              </div>
+
+              {/* 6. Tombol Reset Filter */}
+              <div className="flex justify-start sm:justify-end">
                 <button
                   type="button"
                   onClick={handleReset}
                   disabled={!isFilterActive}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <svg
                     className="h-3.5 w-3.5 text-gray-500"
@@ -322,11 +438,12 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
                     <tr className="border-b border-gray-200 bg-gray-50/75 text-xs font-semibold uppercase tracking-wider text-gray-600">
                       <th className="px-4 py-3.5 text-center w-14">No</th>
                       <th className="px-4 py-3.5">Nama Peserta</th>
-                      <th className="px-4 py-3.5">Institusi</th>
+                      <th className="px-4 py-3.5 min-w-[180px] sm:min-w-[200px]">Institusi</th>
                       <th className="px-4 py-3.5">Jurusan</th>
                       <th className="px-4 py-3.5">Posisi Penugasan</th>
-                      <th className="px-4 py-3.5">Tanggal Selesai</th>
-                      <th className="px-4 py-3.5 text-right">Aksi</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap">Tanggal Selesai</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap">Sisa Magang</th>
+                      <th className="px-4 py-3.5 text-right whitespace-nowrap">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -343,32 +460,69 @@ export function ActiveInternsTable({ items }: ActiveInternsTableProps) {
                           <td className="px-4 py-3.5">
                             <Link
                               href={`/peserta/${item.id}`}
-                              className="font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+                              className="block"
                             >
-                              {item.name}
+                              <div className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                                {item.name}
+                              </div>
+                              {(item.email || item.phone) && (
+                                <div className="text-xs text-gray-500">
+                                  {item.email || item.phone}
+                                </div>
+                              )}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3.5 text-gray-700 min-w-[180px] sm:min-w-[200px] max-w-[280px]">
+                            <Link
+                              href={`/peserta/${item.id}`}
+                              className="block"
+                              title={item.institutionName || undefined}
+                            >
+                              <div className="font-medium text-gray-900 truncate">
+                                {item.institutionName || '-'}
+                              </div>
+                              {item.applicationType && (
+                                <div className="text-[11px] text-gray-400">
+                                  [{item.applicationType}]
+                                </div>
+                              )}
                             </Link>
                           </td>
                           <td className="px-4 py-3.5 text-gray-700">
-                            {item.institutionName || '-'}
-                          </td>
-                          <td className="px-4 py-3.5 text-gray-700">
-                            {item.majorName || '-'}
+                            <Link href={`/peserta/${item.id}`} className="block">
+                              {item.majorName || '-'}
+                            </Link>
                           </td>
                           <td className="px-4 py-3.5">
-                            {item.positionName ? (
-                              <span className="font-medium text-gray-900">
-                                {item.positionName}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400 italic text-xs">
-                                -- Belum ditetapkan --
-                              </span>
-                            )}
+                            <Link href={`/peserta/${item.id}`} className="block">
+                              {item.positionName ? (
+                                <span className="font-medium text-gray-900">
+                                  {item.positionName}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 italic text-xs">
+                                  -- Belum ditetapkan --
+                                </span>
+                              )}
+                              {item.requestedPositionName &&
+                                item.positionName !== item.requestedPositionName && (
+                                  <div className="text-[11px] text-gray-400">
+                                    Minat: {item.requestedPositionName}
+                                  </div>
+                                )}
+                            </Link>
                           </td>
                           <td className="px-4 py-3.5 whitespace-nowrap text-xs text-gray-700">
-                            {item.actual_end_date
-                              ? formatDate(item.actual_end_date)
-                              : '-'}
+                            <Link href={`/peserta/${item.id}`} className="block">
+                              {item.actual_end_date
+                                ? formatDate(item.actual_end_date)
+                                : '-'}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3.5 whitespace-nowrap text-xs">
+                            <Link href={`/peserta/${item.id}`} className="block">
+                              <RemainingBadge date={item.actual_end_date} />
+                            </Link>
                           </td>
                           <td className="px-4 py-3.5 text-right whitespace-nowrap">
                             <Link
