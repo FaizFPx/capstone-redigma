@@ -71,8 +71,11 @@ export function Header({ userName, userRole, onToggleMobileMenu }: HeaderProps) 
         {/* Mobile menu hamburger toggle */}
         <button
           type="button"
-          onClick={onToggleMobileMenu}
-          className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 md:hidden"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleMobileMenu()
+          }}
+          className="relative z-10 flex h-11 w-11 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200 md:hidden cursor-pointer touch-manipulation transition-colors"
           aria-label="Buka Menu"
         >
           <svg

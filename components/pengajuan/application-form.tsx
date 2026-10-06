@@ -152,15 +152,21 @@ export function ApplicationForm({
       return
     }
 
-    // Validasi jurusan pada setiap rincian
+    // Validasi rincian: jika memilih tambah baru, pastikan nama diisi
     for (let i = 0; i < details.length; i++) {
       const d = details[i]
-      const hasMajor = d.major_id && d.major_id !== 'NEW' && d.major_id.trim() !== ''
-      const hasNewMajor = d.major_id === 'NEW' && d.new_major_name && d.new_major_name.trim().length > 0
-
-      if (!hasMajor && !hasNewMajor) {
+      if (d.major_id === 'NEW' && (!d.new_major_name || !d.new_major_name.trim())) {
         setErrorMessage(
-          `Jurusan pada Rincian #${i + 1} wajib dipilih. Silakan pilih jurusan dari daftar atau tambahkan jurusan baru.`
+          `Nama jurusan baru pada Rincian #${i + 1} wajib diisi jika memilih opsi tambah jurusan baru.`
+        )
+        return
+      }
+      if (
+        d.requested_position_id === 'NEW' &&
+        (!d.new_position_name || !d.new_position_name.trim())
+      ) {
+        setErrorMessage(
+          `Nama posisi baru pada Rincian #${i + 1} wajib diisi jika memilih opsi tambah posisi baru.`
         )
         return
       }
@@ -214,7 +220,11 @@ export function ApplicationForm({
     <form
       onSubmit={handleSubmit}
       onChange={() => setIsDirty(true)}
-      onInput={() => setIsDirty(true)}
+      onInput={(e) => {
+        if ((e.target as HTMLElement)?.tagName !== 'SELECT') {
+          setIsDirty(true)
+        }
+      }}
       autoComplete="off"
       className="space-y-8"
     >
@@ -242,7 +252,10 @@ export function ApplicationForm({
             <select
               name="application_type"
               value={appType}
-              onChange={(e) => setAppType(e.target.value as ApplicationType)}
+              onChange={(e) => {
+                setAppType(e.target.value as ApplicationType)
+                setIsDirty(true)
+              }}
               className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
               required
             >
@@ -289,7 +302,10 @@ export function ApplicationForm({
                   <select
                     name="new_institution_type"
                     value={newInstType}
-                    onChange={(e) => setNewInstType(e.target.value)}
+                    onChange={(e) => {
+                      setNewInstType(e.target.value)
+                      setIsDirty(true)
+                    }}
                     className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                   >
                     {INSTITUTION_TYPES.map((t) => (
@@ -304,7 +320,10 @@ export function ApplicationForm({
               <select
                 name="institution_id"
                 value={selectedInstId}
-                onChange={(e) => setSelectedInstId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedInstId(e.target.value)
+                  setIsDirty(true)
+                }}
                 className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 required
               >

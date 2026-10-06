@@ -220,10 +220,15 @@ export function useUnsavedChangesGuard({
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Ketika form berubah dirty, sisipkan history guard jika belum ada
+    // Ketika form berubah dirty, sisipkan history guard jika belum ada (ditunda sedikit agar tidak menginterupsi commit event pada form controls seperti native select)
+    let timer: ReturnType<typeof setTimeout> | undefined
     if (isDirty && !isGuardedRef.current) {
-      window.history.pushState({ __redigma_guard: true }, '', window.location.href)
-      isGuardedRef.current = true
+      timer = setTimeout(() => {
+        if (!isGuardedRef.current && isDirtyRef.current) {
+          window.history.pushState({ __redigma_guard: true }, '', window.location.href)
+          isGuardedRef.current = true
+        }
+      }, 50)
     }
 
     const handlePopState = () => {
@@ -240,6 +245,7 @@ export function useUnsavedChangesGuard({
 
     window.addEventListener('popstate', handlePopState)
     return () => {
+      if (timer) clearTimeout(timer)
       window.removeEventListener('popstate', handlePopState)
     }
   }, [isDirty])

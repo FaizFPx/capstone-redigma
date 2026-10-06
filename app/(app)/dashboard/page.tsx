@@ -1,11 +1,13 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatDate } from '@/lib/utils/date'
+import { ActiveInternsTable } from '@/components/dashboard/active-interns-table'
 import type {
   DashboardKPI,
   DashboardAttentionItem,
   RecentApplicationItem,
   RecentParticipantItem,
+  ActiveInternItem,
 } from './types'
 
 export default async function DashboardPage() {
@@ -62,6 +64,11 @@ export default async function DashboardPage() {
         kop_letter_number,
         institution:institutions!institution_id ( id, name, type )
       ),
+      application_detail:application_details!application_detail_id (
+        id,
+        major:majors!major_id ( id, name, code )
+      ),
+      major:majors!major_id ( id, name, code ),
       position_hc:positions!positioning_by_hc_id ( id, name ),
       position_req:positions!positioning_by_request_id ( id, name ),
       status:internship_statuses!status_id ( id, name, is_active_intern )
@@ -195,6 +202,36 @@ export default async function DashboardPage() {
       positionName: part.position_hc?.name || part.position_req?.name || null,
     }
   })
+
+  // 7. Active Interns (Sedang Magang) - prioritized by nearest actual_end_date
+  const activeInterns: ActiveInternItem[] = allParts
+    .filter((p) => p.status_id === 'sedang_magang')
+    .sort((a, b) => {
+      if (!a.actual_end_date && !b.actual_end_date) {
+        return (a.name || '').localeCompare(b.name || '')
+      }
+      if (!a.actual_end_date) return 1
+      if (!b.actual_end_date) return -1
+      const diff =
+        new Date(a.actual_end_date).getTime() -
+        new Date(b.actual_end_date).getTime()
+      if (diff !== 0) return diff
+      return (a.name || '').localeCompare(b.name || '')
+    })
+    .map((part) => {
+      const rawMajor = part.major || part.application_detail?.major
+      const majorObj = Array.isArray(rawMajor) ? rawMajor[0] : rawMajor
+      const majorName = majorObj?.code || majorObj?.name || null
+
+      return {
+        id: part.id,
+        name: part.name,
+        institutionName: part.application?.institution?.name || null,
+        majorName,
+        positionName: part.position_hc?.name || null,
+        actual_end_date: part.actual_end_date || null,
+      }
+    })
 
   return (
     <div className="space-y-8 pb-12">
@@ -452,6 +489,9 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Peserta yang Sedang Magang */}
+      <ActiveInternsTable items={activeInterns} total={kpi.activeParticipants} />
 
       {/* Main Grid: Recent Applications & Recent Participants */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

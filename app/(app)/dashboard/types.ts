@@ -76,3 +76,12 @@ export interface RecentParticipantItem {
   institutionName?: string | null
   positionName?: string | null
 }
+
+export interface ActiveInternItem {
+  id: string
+  name: string
+  institutionName: string | null
+  majorName: string | null
+  positionName: string | null
+  actual_end_date: string | null
+}

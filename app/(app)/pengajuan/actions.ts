@@ -110,20 +110,7 @@ export async function createApplicationAction(
     return { error: 'Format rincian pengajuan tidak valid.' }
   }
 
-  // 4b. Validasi setiap rincian jurusan wajib dipilih
-  if (Array.isArray(parsedDetails) && parsedDetails.length > 0) {
-    for (let i = 0; i < parsedDetails.length; i++) {
-      const item = parsedDetails[i]
-      const hasMajor = Boolean(parseOptionalUuid(item.major_id))
-      const hasNewMajor = Boolean(item.new_major_name && item.new_major_name.trim().length > 0)
-
-      if (!hasMajor && !hasNewMajor) {
-        return {
-          error: `Jurusan pada Rincian #${i + 1} wajib dipilih. Silakan pilih jurusan dari daftar atau tambahkan jurusan baru.`,
-        }
-      }
-    }
-  }
+  // 4b. Pengisian jurusan pada rincian bersifat opsional (dapat berupa NULL)
 
   // 5. Insert ke tabel applications
   const { data: appData, error: appError } = await supabase
@@ -378,20 +365,7 @@ export async function updateApplicationAction(
       notes?: string | null
     }>
 
-    // Validasi setiap rincian jurusan wajib dipilih sebelum menghapus rincian lama
-    if (Array.isArray(details) && details.length > 0) {
-      for (let i = 0; i < details.length; i++) {
-        const item = details[i]
-        const hasMajor = Boolean(parseOptionalUuid(item.major_id))
-        const hasNewMajor = Boolean(item.new_major_name && item.new_major_name.trim().length > 0)
-
-        if (!hasMajor && !hasNewMajor) {
-          return {
-            error: `Jurusan pada Rincian #${i + 1} wajib dipilih. Silakan pilih jurusan dari daftar atau tambahkan jurusan baru.`,
-          }
-        }
-      }
-    }
+    // Pengisian jurusan pada rincian bersifat opsional (dapat berupa NULL)
 
     // Hapus detail sebelumnya
     await supabase.from('application_details').delete().eq('application_id', applicationId)

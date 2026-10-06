@@ -26,7 +26,7 @@ export function AppShell({ userName, userRole, children }: AppShellProps) {
         <Header
           userName={userName}
           userRole={userRole}
-          onToggleMobileMenu={() => setMobileMenuOpen((prev) => !prev)}
+          onToggleMobileMenu={() => setMobileMenuOpen(true)}
         />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">

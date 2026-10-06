@@ -127,16 +127,21 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Backdrop overlay for mobile off-canvas drawer */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs transition-opacity md:hidden"
-          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs transition-opacity md:hidden cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
           aria-hidden="true"
         />
       )}
 
       {/* Sidebar container with Dark Navy theme */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 flex w-64 flex-col border-r border-[#1e293b] bg-[#0b1329] text-slate-300 transition-transform duration-200 ease-in-out md:static md:translate-x-0 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed top-0 bottom-0 left-0 z-50 flex w-64 flex-col border-r border-[#1e293b] bg-[#0b1329] text-slate-300 transition-all duration-200 ease-in-out md:static md:translate-x-0 md:pointer-events-auto md:visible ${
+          isOpen
+            ? 'translate-x-0 pointer-events-auto visible shadow-2xl'
+            : '-translate-x-full pointer-events-none invisible'
         }`}
       >
         {/* Brand Header */}
