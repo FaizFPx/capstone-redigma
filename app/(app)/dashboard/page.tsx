@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { formatDate } from '@/lib/utils/date'
 import { ActiveInternsTable } from '@/components/dashboard/active-interns-table'
+import { QuickStartGuide } from '@/components/dashboard/quick-start-guide'
 import type {
   DashboardKPI,
   DashboardAttentionItem,
@@ -252,6 +253,9 @@ export default async function DashboardPage() {
           {today.toLocaleDateString('id-ID', { weekday: 'long' })}, {formatDate(today)}
         </div>
       </div>
+
+      {/* Alur Pengelolaan Magang (Quick Start Guide) */}
+      <QuickStartGuide totalApplications={kpi.totalApplications} />
 
       {/* KPI Section A: Pengajuan Magang */}
       <div>

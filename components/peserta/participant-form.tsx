@@ -93,6 +93,54 @@ export function ParticipantForm({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
 
+  // Empty State Guard jika tidak ada pengajuan sama sekali (P0-3)
+  if (applications.length === 0 && !isEdit) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 sm:p-12 text-center shadow-xs">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+          <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.75"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+        </div>
+
+        <h2 className="mt-4 text-lg font-bold text-gray-900">
+          Belum ada pengajuan magang
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 leading-relaxed">
+          Peserta harus didaftarkan berdasarkan pengajuan magang yang sudah tercatat.
+        </p>
+
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/pengajuan/baru"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>+ Buat Pengajuan Sekarang</span>
+          </Link>
+          <Link
+            href="/peserta"
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Kembali ke Daftar Peserta
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  // Pengajuan yang sedang dipilih
+  const selectedApp = useMemo(() => {
+    return applications.find((a) => a.id === selectedAppId) || null
+  }, [applications, selectedAppId])
+
   // Filter application details sesuai application yang dipilih
   const availableDetails = useMemo(() => {
     if (!selectedAppId) return []
@@ -314,6 +362,55 @@ export function ParticipantForm({
         </p>
 
         <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
+          {/* Konteks Pengajuan Aktif (Context Card) */}
+          {selectedApp && (
+            <div className="sm:col-span-2 rounded-xl bg-blue-50/70 border border-blue-200 p-4 text-xs text-blue-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-blue-600 p-2 text-white shrink-0 mt-0.5 sm:mt-0">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-gray-900 text-sm">
+                      {selectedApp.institution?.name || 'Institusi'}
+                    </span>
+                    <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">
+                      {selectedApp.application_type}
+                    </span>
+                    {selectedApp.decision_id === 'diterima' && (
+                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 border border-emerald-200">
+                        ✓ Disetujui / Diterima
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-gray-600">
+                    Peserta akan terhubung langsung ke pengajuan ini.
+                    {selectedApp.kop_letter_number ? ` No. Surat: ${selectedApp.kop_letter_number}.` : ''}
+                    {' '}Tanggal Masuk: {selectedApp.apply_date}.
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                href={`/pengajuan/${selectedApp.id}`}
+                target="_blank"
+                className="inline-flex items-center gap-1 shrink-0 text-xs font-semibold text-blue-700 hover:text-blue-900 underline"
+              >
+                <span>Lihat Detail Pengajuan</span>
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </Link>
+            </div>
+          )}
+
           {/* Berkas Pengajuan */}
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
@@ -334,12 +431,21 @@ export function ParticipantForm({
                   Belum ada berkas pengajuan (Buat pengajuan terlebih dahulu)
                 </option>
               ) : (
-                applications.map((app) => (
-                  <option key={app.id} value={app.id}>
-                    [{app.application_type}] {app.institution?.name || 'Institusi'}
-                    {app.kop_letter_number ? ` - KOP: ${app.kop_letter_number}` : ''} ({app.apply_date})
-                  </option>
-                ))
+                applications.map((app) => {
+                  const decisionTag =
+                    app.decision_id === 'diterima'
+                      ? ' [Diterima]'
+                      : app.decision?.name
+                      ? ` [${app.decision.name}]`
+                      : ''
+                  return (
+                    <option key={app.id} value={app.id}>
+                      [{app.application_type}] {app.institution?.name || 'Institusi'}
+                      {app.kop_letter_number ? ` - KOP: ${app.kop_letter_number}` : ''}
+                      {decisionTag} ({app.apply_date})
+                    </option>
+                  )
+                })
               )}
             </select>
           </div>
@@ -521,11 +627,14 @@ export function ParticipantForm({
             </select>
           </div>
 
-          {/* Posisi Berdasarkan Permintaan */}
+          {/* P0-4: Minat Posisi / Divisi (Permintaan Pemohon) */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
-              Posisi Berdasarkan Permintaan
+              Minat Posisi / Divisi (Permintaan Pemohon)
             </label>
+            <p className="mt-1 text-xs text-gray-500">
+              Posisi atau bidang yang diajukan oleh pemohon/sekolah.
+            </p>
             <select
               name="positioning_by_request_id"
               value={positionReqId}
@@ -541,11 +650,14 @@ export function ParticipantForm({
             </select>
           </div>
 
-          {/* Posisi Penugasan Nyata oleh HC */}
+          {/* P0-4: Penempatan Posisi / Divisi (Keputusan HC) */}
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
-              Posisi Penugasan Nyata (Keputusan HC)
+              Penempatan Posisi / Divisi (Keputusan HC)
             </label>
+            <p className="mt-1 text-xs text-gray-500">
+              Posisi atau divisi tempat peserta benar-benar ditempatkan oleh REDIGMA.
+            </p>
             <select
               name="positioning_by_hc_id"
               value={positionHcId}

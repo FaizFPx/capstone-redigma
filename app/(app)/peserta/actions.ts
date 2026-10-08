@@ -88,13 +88,30 @@ export async function createParticipantAction(
     String(formData.get('status_id') || 'belum_mulai').trim() || 'belum_mulai'
   const notes = String(formData.get('notes') || '').trim() || null
 
-  // 3. Validasi
+  // 3. Validasi dasar
   if (!name) {
     return { error: 'Nama lengkap peserta wajib diisi.' }
   }
 
   if (!application_id) {
     return { error: 'Berkas pengajuan terkait wajib dipilih.' }
+  }
+
+  // Validasi pengajuan induk aktif / tidak ditolak
+  const { data: targetApp, error: appError } = await supabase
+    .from('applications')
+    .select('id, decision_id')
+    .eq('id', application_id)
+    .maybeSingle()
+
+  if (appError || !targetApp) {
+    return { error: 'Berkas pengajuan yang dipilih tidak ditemukan atau tidak valid.' }
+  }
+
+  if (targetApp.decision_id === 'ditolak') {
+    return {
+      error: 'Pengajuan ini telah ditolak. Peserta tidak dapat didaftarkan ke pengajuan yang ditolak.',
+    }
   }
 
   if (actual_start_date && actual_end_date) {
@@ -248,6 +265,23 @@ export async function updateParticipantAction(
 
   if (!application_id) {
     return { error: 'Berkas pengajuan terkait wajib dipilih.' }
+  }
+
+  // Validasi pengajuan induk aktif / tidak ditolak
+  const { data: targetApp, error: appError } = await supabase
+    .from('applications')
+    .select('id, decision_id')
+    .eq('id', application_id)
+    .maybeSingle()
+
+  if (appError || !targetApp) {
+    return { error: 'Berkas pengajuan yang dipilih tidak ditemukan atau tidak valid.' }
+  }
+
+  if (targetApp.decision_id === 'ditolak') {
+    return {
+      error: 'Pengajuan ini telah ditolak. Peserta tidak dapat didaftarkan ke pengajuan yang ditolak.',
+    }
   }
 
   if (actual_start_date && actual_end_date) {
@@ -417,4 +451,91 @@ export async function deleteParticipantAction(
   }
 
   return { success: true }
+}
+
+export async function quickUpdateParticipantStatusAction(
+  participantId: string,
+  targetStatusId: string,
+  actualDate?: string | null
+): Promise<ParticipantActionResponse> {
+  const supabase = await createClient()
+
+  // 1. Verifikasi sesi user aktif
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'Anda harus login untuk melakukan tindakan ini.' }
+  }
+
+  // 2. Verifikasi otorisasi role HC
+  const isHc = await verifyHcUser(supabase, user)
+  if (!isHc) {
+    return { error: 'Anda tidak memiliki izin untuk mengubah status peserta.' }
+  }
+
+  const cleanPartId = parseOptionalUuid(participantId)
+  if (!cleanPartId) {
+    return { error: 'ID peserta tidak valid.' }
+  }
+
+  // 3. Validasi target status
+  if (!['sedang_magang', 'sudah_selesai'].includes(targetStatusId)) {
+    return { error: 'Status target tidak valid untuk transisi cepat.' }
+  }
+
+  // 4. Ambil data peserta existing
+  const { data: existingParticipant, error: fetchErr } = await supabase
+    .from('participants')
+    .select('id, application_id, status_id, actual_start_date, actual_end_date')
+    .eq('id', cleanPartId)
+    .maybeSingle()
+
+  if (fetchErr || !existingParticipant) {
+    return { error: 'Data peserta tidak ditemukan.' }
+  }
+
+  const updatePayload: Record<string, any> = {
+    status_id: targetStatusId,
+    updated_at: new Date().toISOString(),
+  }
+
+  const cleanDate = actualDate?.trim() || null
+
+  if (targetStatusId === 'sedang_magang') {
+    if (cleanDate) {
+      updatePayload.actual_start_date = cleanDate
+    } else if (!existingParticipant.actual_start_date) {
+      updatePayload.actual_start_date = new Date().toISOString().split('T')[0]
+    }
+  } else if (targetStatusId === 'sudah_selesai') {
+    if (cleanDate) {
+      updatePayload.actual_end_date = cleanDate
+    } else if (!existingParticipant.actual_end_date) {
+      updatePayload.actual_end_date = new Date().toISOString().split('T')[0]
+    }
+  }
+
+  // 5. Update data peserta di database
+  const { error: updateError } = await supabase
+    .from('participants')
+    .update(updatePayload)
+    .eq('id', cleanPartId)
+
+  if (updateError) {
+    console.error('Quick update participant status error:', updateError)
+    return { error: `Gagal memperbarui status peserta: ${updateError.message}` }
+  }
+
+  // 6. Revalidasi
+  revalidatePath('/peserta')
+  revalidatePath(`/peserta/${cleanPartId}`)
+  revalidatePath('/dashboard')
+  revalidatePath('/monitoring')
+  if (existingParticipant.application_id) {
+    revalidatePath(`/pengajuan/${existingParticipant.application_id}`)
+  }
+
+  return { success: true, id: cleanPartId }
 }

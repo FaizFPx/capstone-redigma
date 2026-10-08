@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatDateTime } from '@/lib/utils/date'
 import { DeleteApplicationButton } from '@/components/pengajuan/delete-application-button'
+import { QuickStatusModal } from '@/components/pengajuan/quick-status-modal'
 import type { ApplicationItem } from '../types'
 
 export default async function DetailPengajuanPage({
@@ -82,6 +83,37 @@ export default async function DetailPengajuanPage({
     .eq('application_id', id)
     .order('created_at', { ascending: false })
 
+  // Ambil peserta yang terhubung dengan pengajuan ini
+  const { data: rawParticipants } = await supabase
+    .from('participants')
+    .select(
+      `
+      id,
+      name,
+      email,
+      phone,
+      actual_start_date,
+      actual_end_date,
+      status_id,
+      major:majors!major_id ( id, name, code ),
+      position_assigned:positions!positioning_by_hc_id ( id, name ),
+      position_requested:positions!positioning_by_request_id ( id, name ),
+      status:internship_statuses!status_id ( id, name, is_active_intern )
+    `
+    )
+    .eq('application_id', id)
+    .order('created_at', { ascending: false })
+
+  const participants: any[] = rawParticipants || []
+
+  // Ambil referensi tahap & keputusan untuk Quick Status Transition
+  const [{ data: stagesData }, { data: decisionsData }] = await Promise.all([
+    supabase.from('application_stages').select('id, name').order('id'),
+    supabase.from('application_decisions').select('id, name').order('id'),
+  ])
+  const stages = stagesData || []
+  const decisions = decisionsData || []
+
   // Hitung total kuota secara dinamis (Single source of truth dari application_details)
   const totalRequestedQuota = (app.details || []).reduce(
     (sum, d) => sum + (d.requested_quota || 0),
@@ -92,6 +124,41 @@ export default async function DetailPengajuanPage({
     0
   )
 
+  const isApproved = app.decision_id === 'diterima'
+  const isInProcess = app.decision_id === 'dalam_proses'
+  const isRejected = app.decision_id === 'ditolak'
+
+  const getParticipantStatusBadge = (statusId: string, statusName?: string) => {
+    const label = statusName || statusId
+    switch (statusId) {
+      case 'sedang_magang':
+        return (
+          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+            <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            {label}
+          </span>
+        )
+      case 'sudah_selesai':
+        return (
+          <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200">
+            {label}
+          </span>
+        )
+      case 'mengundurkan_diri':
+        return (
+          <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 border border-red-200">
+            {label}
+          </span>
+        )
+      default:
+        return (
+          <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 border border-amber-200">
+            {label}
+          </span>
+        )
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Toast / Notification Banner */}
@@ -99,7 +166,7 @@ export default async function DetailPengajuanPage({
         <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm font-medium text-green-800 flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
             <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             <span>
               {success === 'created'
@@ -119,7 +186,7 @@ export default async function DetailPengajuanPage({
             title="Kembali ke daftar pengajuan"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
           </Link>
           <div>
@@ -143,13 +210,35 @@ export default async function DetailPengajuanPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {isApproved && (
+            <Link
+              href={`/peserta/baru?application_id=${app.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-sm font-semibold text-white shadow-xs hover:bg-emerald-700 active:bg-emerald-800 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>{participants.length > 0 ? '+ Tambah Peserta Lagi' : '+ Daftarkan Peserta'}</span>
+            </Link>
+          )}
+
+          <QuickStatusModal
+            applicationId={app.id}
+            currentStageId={app.stage_id}
+            currentDecisionId={app.decision_id}
+            institutionName={app.institution?.name}
+            applicationType={app.application_type}
+            stages={stages}
+            decisions={decisions}
+          />
+
           <Link
             href={`/pengajuan/${app.id}/edit`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-xs hover:bg-gray-50 transition-colors"
           >
             <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
             Edit Pengajuan
           </Link>
@@ -159,6 +248,100 @@ export default async function DetailPengajuanPage({
           />
         </div>
       </div>
+
+      {/* P0-2 & P0-6: Next Action Bridge / Guidance Card */}
+      {isApproved && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+                Pengajuan telah diterima
+              </div>
+              <h2 className="text-base font-bold text-gray-900">
+                Langkah selanjutnya: daftarkan peserta dari pengajuan ini.
+              </h2>
+              <p className="text-xs text-gray-600">
+                {participants.length > 0
+                  ? `Saat ini terdapat ${participants.length} peserta terdaftar dari pengajuan ini.`
+                  : 'Pengajuan telah resmi disetujui. Daftarkan siswa/mahasiswa dari institusi ini untuk memulai alur magang.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0">
+              {participants.length > 0 && (
+                <span className="text-xs font-medium text-emerald-800 bg-white/90 px-3 py-1.5 rounded-lg border border-emerald-200/80">
+                  Peserta terdaftar: <strong>{participants.length} orang</strong>
+                </span>
+              )}
+              <Link
+                href={`/peserta/baru?application_id=${app.id}`}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-emerald-700 active:bg-emerald-800 transition-colors"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span>
+                  {participants.length > 0
+                    ? '+ Tambah Peserta Lagi'
+                    : '+ Daftarkan Peserta untuk Pengajuan Ini'}
+                </span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isInProcess && (
+        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700 shrink-0 mt-0.5">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">
+                  Pengajuan masih dalam proses
+                </h3>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Pengajuan masih dalam proses. Perbarui keputusan setelah tindak lanjut selesai.
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/pengajuan/${app.id}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50 transition-colors self-start sm:self-auto"
+            >
+              <span>Perbarui Keputusan</span>
+              <span>&rarr;</span>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {isRejected && (
+        <div className="rounded-2xl border border-red-200/80 bg-red-50/60 p-4 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-100 text-red-700 shrink-0 mt-0.5">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">
+                Pengajuan ditolak
+              </h3>
+              <p className="text-xs text-gray-600 mt-0.5">
+                Pengajuan ini ditolak. Tidak ada peserta yang dapat didaftarkan dari pengajuan ini.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grid Informasi Utama & Periode */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -300,7 +483,7 @@ export default async function DetailPengajuanPage({
               <tr className="border-b border-gray-200 bg-gray-50/75 text-xs font-semibold uppercase tracking-wider text-gray-600">
                 <th className="px-6 py-3">No</th>
                 <th className="px-6 py-3">Jurusan</th>
-                <th className="px-6 py-3">Posisi Diminta</th>
+                <th className="px-6 py-3">Minat Posisi (Permintaan)</th>
                 <th className="px-6 py-3 text-center">Kuota Diajukan</th>
                 <th className="px-6 py-3 text-center">Kuota Disetujui</th>
                 <th className="px-6 py-3">Catatan</th>
@@ -349,7 +532,135 @@ export default async function DetailPengajuanPage({
         </div>
       </div>
 
-      {/* Card 4: Riwayat Status Log (application_status_logs) */}
+      {/* Card 4 (P0-2): Peserta Terdaftar dari Pengajuan Ini */}
+      <div className="rounded-xl border border-gray-200 bg-white shadow-xs overflow-hidden">
+        <div className="p-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-900">
+                Peserta Terdaftar dari Pengajuan Ini
+              </h2>
+              <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700 border border-blue-200/60">
+                {participants.length} orang
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Daftar siswa atau mahasiswa yang terhubung langsung dengan berkas pengajuan ini.
+            </p>
+          </div>
+
+          {isApproved && (
+            <Link
+              href={`/peserta/baru?application_id=${app.id}`}
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 active:bg-emerald-800 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>{participants.length > 0 ? '+ Tambah Peserta Lagi' : '+ Daftarkan Peserta'}</span>
+            </Link>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          {participants.length === 0 ? (
+            <div className="p-8 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-800">
+                Belum ada peserta yang didaftarkan untuk pengajuan ini.
+              </p>
+              <p className="text-xs text-gray-400 mt-1 max-w-md mx-auto">
+                {isApproved
+                  ? 'Pengajuan telah diterima. Klik tombol di bawah untuk mendaftarkan nama siswa / mahasiswa dari pengajuan ini.'
+                  : 'Peserta dapat didaftarkan setelah pengajuan magang ini disetujui (diterima) oleh pihak Human Capital.'}
+              </p>
+              {isApproved && (
+                <div className="mt-4">
+                  <Link
+                    href={`/peserta/baru?application_id=${app.id}`}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>+ Daftarkan Peserta untuk Pengajuan Ini</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/75 text-xs font-semibold uppercase tracking-wider text-gray-600">
+                  <th className="px-6 py-3">No</th>
+                  <th className="px-6 py-3">Nama Peserta</th>
+                  <th className="px-6 py-3">Jurusan</th>
+                  <th className="px-6 py-3">Penempatan Posisi (HC)</th>
+                  <th className="px-6 py-3">Periode Magang</th>
+                  <th className="px-6 py-3">Status</th>
+                  <th className="px-6 py-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {participants.map((p, index) => (
+                  <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4 text-xs font-bold text-gray-400">
+                      #{index + 1}
+                    </td>
+                    <td className="px-6 py-4">
+                      <Link
+                        href={`/peserta/${p.id}`}
+                        className="font-semibold text-gray-900 hover:text-blue-600 transition-colors block"
+                      >
+                        {p.name}
+                      </Link>
+                      {(p.email || p.phone) && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {p.email || p.phone}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-gray-700">
+                      {p.major?.name || '-'}
+                    </td>
+                    <td className="px-6 py-4 text-gray-800 font-medium">
+                      {p.position_assigned?.name || (
+                        <span className="text-gray-400 italic font-normal">Belum Ditetapkan HC</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-xs text-gray-600">
+                      {p.actual_start_date ? formatDate(p.actual_start_date) : '-'} &ndash;{' '}
+                      {p.actual_end_date ? formatDate(p.actual_end_date) : '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getParticipantStatusBadge(p.status_id, p.status?.name)}
+                    </td>
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <Link
+                        href={`/peserta/${p.id}`}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                      >
+                        Detail Peserta &rarr;
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Card 5: Riwayat Status Log (application_status_logs) */}
       {logsData && logsData.length > 0 && (
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xs">
           <h2 className="text-base font-semibold text-gray-900 border-b border-gray-100 pb-3">

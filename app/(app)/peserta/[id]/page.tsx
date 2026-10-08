@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatDateTime } from '@/lib/utils/date'
 import { DeleteParticipantButton } from '@/components/peserta/delete-participant-button'
+import { ParticipantQuickStatus } from '@/components/peserta/quick-status-modal'
 import type { ParticipantItem } from '../types'
 
 export default async function DetailPesertaPage({
@@ -175,14 +176,21 @@ export default async function DetailPesertaPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <ParticipantQuickStatus
+            participantId={p.id}
+            participantName={p.name}
+            currentStatusId={p.status_id}
+            actualStartDate={p.actual_start_date}
+            actualEndDate={p.actual_end_date}
+          />
           <Link
             href={
               p.application_id
                 ? `/peserta/baru?application_id=${p.application_id}`
                 : '/peserta/baru'
             }
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-xs hover:bg-gray-50 transition-colors"
           >
             <svg
               className="h-4 w-4"
@@ -259,7 +267,7 @@ export default async function DetailPesertaPage({
               </div>
 
               <div>
-                <span className="text-xs text-gray-400 block font-medium">Posisi Minat (Permintaan)</span>
+                <span className="text-xs text-gray-400 block font-medium">Minat Posisi / Divisi (Permintaan Pemohon)</span>
                 <span className="font-medium text-gray-700">
                   {p.position_requested?.name || '-'}
                 </span>
@@ -267,7 +275,7 @@ export default async function DetailPesertaPage({
 
               <div className="sm:col-span-2 rounded-lg bg-blue-50/60 p-4 border border-blue-100">
                 <span className="text-xs font-semibold uppercase tracking-wider text-blue-700 block">
-                  Posisi Penugasan Nyata (Keputusan HC)
+                  Penempatan Posisi / Divisi (Keputusan HC)
                 </span>
                 <div className="mt-1 text-base font-bold text-gray-900">
                   {p.position_assigned?.name || 'Belum Ditetapkan HC'}

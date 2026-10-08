@@ -18,6 +18,10 @@ export default async function MonitoringPage({
     stage?: string
     decision?: string
     status?: string
+    institution?: string
+    major?: string
+    position?: string
+    remaining?: string
   }>
 }) {
   const params = await searchParams
@@ -27,6 +31,10 @@ export default async function MonitoringPage({
   const filterStage = (params.stage || 'ALL').trim()
   const filterDecision = (params.decision || 'ALL').trim()
   const filterStatus = (params.status || 'ALL').trim()
+  const filterInstitution = (params.institution || 'ALL').trim()
+  const filterMajor = (params.major || 'ALL').trim()
+  const filterPosition = (params.position || 'ALL').trim()
+  const filterRemaining = (params.remaining || 'ALL').trim()
 
   const supabase = await createClient()
 
@@ -103,13 +111,25 @@ export default async function MonitoringPage({
     partDbQuery = partDbQuery.eq('status_id', filterStatus)
   }
 
-  const [{ data: rawApps }, { data: rawParticipants }] = await Promise.all([
+  const [
+    { data: rawApps },
+    { data: rawParticipants },
+    { data: institutionsData },
+    { data: majorsData },
+    { data: positionsData },
+  ] = await Promise.all([
     appDbQuery,
     partDbQuery,
+    supabase.from('institutions').select('id, name').order('name'),
+    supabase.from('majors').select('id, name').order('name'),
+    supabase.from('positions').select('id, name').order('name'),
   ])
 
   const allApps: any[] = rawApps || []
   const allParts: any[] = rawParticipants || []
+  const filterInstitutions: Array<{ id: string; name: string }> = institutionsData || []
+  const filterMajors: Array<{ id: string; name: string }> = majorsData || []
+  const filterPositions: Array<{ id: string; name: string }> = positionsData || []
 
   // 3. Compute KPI
   const kpi: MonitoringKPI = {
@@ -138,17 +158,23 @@ export default async function MonitoringPage({
       let daysDiff: number | null = null
 
       if (app.confirmation_deadline) {
-        const deadline = new Date(app.confirmation_deadline)
-        deadline.setHours(0, 0, 0, 0)
-        const diffTime = deadline.getTime() - today.getTime()
-        daysDiff = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        const parts = app.confirmation_deadline.split('T')[0].split('-')
+        if (parts.length >= 3) {
+          const dYear = parseInt(parts[0], 10)
+          const dMonth = parseInt(parts[1], 10) - 1
+          const dDay = parseInt(parts[2], 10)
+          const deadlineDate = new Date(dYear, dMonth, dDay, 0, 0, 0, 0)
+          const now = new Date()
+          const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+          daysDiff = Math.round((deadlineDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
 
-        if (daysDiff < 0) {
-          urgencyType = 'OVERDUE'
-          urgencyLabel = `Batas Waktu Terlewat (${Math.abs(daysDiff)} hari lalu)`
-        } else if (daysDiff <= 7) {
-          urgencyType = 'UPCOMING_DEADLINE'
-          urgencyLabel = daysDiff === 0 ? 'Batas Waktu Hari Ini' : `Sisa ${daysDiff} Hari Lagi`
+          if (daysDiff < 0) {
+            urgencyType = 'OVERDUE'
+            urgencyLabel = `Batas Waktu Terlewat (${Math.abs(daysDiff)} hari lalu)`
+          } else if (daysDiff <= 7) {
+            urgencyType = 'UPCOMING_DEADLINE'
+            urgencyLabel = daysDiff === 0 ? 'Batas Waktu Hari Ini' : `Sisa ${daysDiff} Hari Lagi`
+          }
         }
       }
 
@@ -184,7 +210,6 @@ export default async function MonitoringPage({
       const pB = priorityOrder[b.urgencyType]
       if (pA !== pB) return pA - pB
 
-      // Secondary sort: nearest deadline or earliest apply_date
       if (a.daysDifference !== null && b.daysDifference !== null) {
         return a.daysDifference - b.daysDifference
       }
@@ -199,6 +224,23 @@ export default async function MonitoringPage({
     const kop = u.kop_letter_number?.toLowerCase() || ''
     return inst.includes(qLower) || kop.includes(qLower)
   })
+
+  // Sisa masa magang calculation helper (timezone-safe)
+  const calculateRemainingDays = (endDateStr?: string | null): number | null => {
+    if (!endDateStr) return null
+    const parts = endDateStr.split('T')[0].split('-')
+    if (parts.length < 3) return null
+    const endYear = parseInt(parts[0], 10)
+    const endMonth = parseInt(parts[1], 10) - 1
+    const endDay = parseInt(parts[2], 10)
+
+    const endDate = new Date(endYear, endMonth, endDay, 0, 0, 0, 0)
+    const now = new Date()
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+
+    const diffMs = endDate.getTime() - todayDate.getTime()
+    return Math.round(diffMs / (1000 * 60 * 60 * 24))
+  }
 
   const filteredApplications: MonitoringApplicationItem[] = allApps
     .map((app) => {
@@ -232,6 +274,9 @@ export default async function MonitoringPage({
       }
     })
     .filter((a) => {
+      if (filterInstitution !== 'ALL' && a.institution?.id !== filterInstitution) {
+        return false
+      }
       if (!query) return true
       const qLower = query.toLowerCase()
       const inst = a.institution?.name?.toLowerCase() || ''
@@ -240,21 +285,66 @@ export default async function MonitoringPage({
     })
 
   const filteredParticipants: MonitoringParticipantItem[] = allParts
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      phone: p.phone,
-      actual_start_date: p.actual_start_date,
-      actual_end_date: p.actual_end_date,
-      status_id: p.status_id,
-      notes: p.notes,
-      application: p.application,
-      major: p.major,
-      position: p.position_hc || p.position_req,
-      status: p.status,
-    }))
+    .map((p) => {
+      const remainingDays = calculateRemainingDays(p.actual_end_date)
+      return {
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        actual_start_date: p.actual_start_date,
+        actual_end_date: p.actual_end_date,
+        status_id: p.status_id,
+        notes: p.notes,
+        remaining_days: remainingDays,
+        application: p.application,
+        major: p.major,
+        position: p.position_hc || p.position_req,
+        status: p.status,
+      }
+    })
     .filter((p) => {
+      // Filter Institusi
+      if (
+        filterInstitution !== 'ALL' &&
+        p.application?.institution?.id !== filterInstitution
+      ) {
+        return false
+      }
+
+      // Filter Jurusan
+      if (filterMajor !== 'ALL' && p.major?.id !== filterMajor) {
+        return false
+      }
+
+      // Filter Posisi
+      if (filterPosition !== 'ALL' && p.position?.id !== filterPosition) {
+        return false
+      }
+
+      // Filter Sisa Masa Magang
+      if (filterRemaining !== 'ALL') {
+        const days = p.remaining_days
+        if (filterRemaining === 'OVERDUE' && (days === null || days >= 0)) {
+          return false
+        }
+        if (filterRemaining === 'TODAY' && days !== 0) {
+          return false
+        }
+        if (
+          filterRemaining === 'SEGERA' &&
+          (days === null || days < 0 || days > 14)
+        ) {
+          return false
+        }
+        if (filterRemaining === 'ACTIVE' && (days === null || days <= 14)) {
+          return false
+        }
+        if (filterRemaining === 'UNSCHEDULED' && days !== null) {
+          return false
+        }
+      }
+
       if (!query) return true
       const qLower = query.toLowerCase()
       const nameMatch = p.name.toLowerCase().includes(qLower)
@@ -262,7 +352,14 @@ export default async function MonitoringPage({
       const instMatch = p.application?.institution?.name
         ? p.application.institution.name.toLowerCase().includes(qLower)
         : false
-      return nameMatch || emailMatch || instMatch
+      const majorMatch = p.major?.name
+        ? p.major.name.toLowerCase().includes(qLower)
+        : false
+      const posMatch = p.position?.name
+        ? p.position.name.toLowerCase().includes(qLower)
+        : false
+
+      return nameMatch || emailMatch || instMatch || majorMatch || posMatch
     })
 
   const getDecisionBadge = (id: string, name?: string) => {
@@ -351,6 +448,71 @@ export default async function MonitoringPage({
     }
   }
 
+  const getRemainingDaysBadge = (
+    days: number | null | undefined,
+    statusId?: string
+  ) => {
+    if (statusId === 'sudah_selesai') {
+      return (
+        <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200">
+          Magang Selesai
+        </span>
+      )
+    }
+    if (statusId === 'mengundurkan_diri') {
+      return (
+        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 border border-gray-200">
+          Mengundurkan Diri
+        </span>
+      )
+    }
+    if (days === null || days === undefined) {
+      return (
+        <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-0.5 text-xs text-gray-400 border border-gray-200">
+          Belum Dijadwalkan
+        </span>
+      )
+    }
+
+    if (days < 0) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700 border border-red-200">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+          Lewat {Math.abs(days)} hari
+        </span>
+      )
+    }
+    if (days === 0) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-800 border border-amber-300 animate-pulse">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          Selesai Hari Ini
+        </span>
+      )
+    }
+    if (days <= 7) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+          Sisa {days} hari (Segera Selesai)
+        </span>
+      )
+    }
+    if (days <= 14) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50/70 px-2 py-0.5 text-xs font-medium text-amber-700 border border-amber-100">
+          Sisa {days} hari
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        Sisa {days} hari
+      </span>
+    )
+  }
+
   const getUrgencyBadge = (type: UrgentApplicationItem['urgencyType'], label: string) => {
     switch (type) {
       case 'OVERDUE':
@@ -394,7 +556,11 @@ export default async function MonitoringPage({
     filterType !== 'ALL' ||
     filterStage !== 'ALL' ||
     filterDecision !== 'ALL' ||
-    filterStatus !== 'ALL'
+    filterStatus !== 'ALL' ||
+    filterInstitution !== 'ALL' ||
+    filterMajor !== 'ALL' ||
+    filterPosition !== 'ALL' ||
+    filterRemaining !== 'ALL'
 
   return (
     <div className="space-y-8 pb-12">
@@ -404,8 +570,27 @@ export default async function MonitoringPage({
           Monitoring Magang
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Ringkasan operasional terpadu kondisi pengajuan dan status peserta magang REDIGMA.
+          Pusat pemantauan & analisis mendalam pengajuan, tenggat waktu, dan keaktifan peserta magang REDIGMA.
         </p>
+      </div>
+
+      {/* P1-5 Contextual Guidance Banner: Memperjelas Peran Monitoring */}
+      <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/70 via-indigo-50/30 to-white p-4 sm:p-5 shadow-xs">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl bg-blue-600 p-2 text-white shrink-0 mt-0.5">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-gray-950">
+              Pusat Pemantauan & Analisis Magang (Monitoring)
+            </h3>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Fokus halaman ini adalah pelacakan berkas yang memerlukan tindak lanjut seleksi (batas waktu/deadline) dan pemantauan sisa masa magang riil peserta aktif. Gunakan filter terpadu di bawah untuk menelusuri data spesifik per institusi, jurusan, posisi, atau sisa durasi pelaksanaan.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* 1. KPI Summary Cards Grid */}
@@ -507,94 +692,193 @@ export default async function MonitoringPage({
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-xs">
-        <form method="GET" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      {/* Filter & Search Bar Terpadu (P1-4: Actionable Filter) */}
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-xs space-y-4">
+        <form method="GET" className="space-y-3">
           <input type="hidden" name="tab" value={activeTab} />
 
-          {/* Search box */}
-          <div className="lg:col-span-2">
-            <input
-              type="text"
-              name="q"
-              defaultValue={query}
-              placeholder="Cari institusi, nomor KOP, nama peserta..."
-              autoComplete="off"
-              className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
-            />
+          {/* Baris 1: Pencarian teks & Pengajuan filters */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {/* Search box */}
+            <div className="lg:col-span-2">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Pencarian Cepat
+              </label>
+              <input
+                type="text"
+                name="q"
+                defaultValue={query}
+                placeholder="Cari institusi, nomor KOP, nama peserta, jurusan..."
+                autoComplete="off"
+                className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+              />
+            </div>
+
+            {/* Filter Jenis Pengajuan */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Jenis Pengajuan
+              </label>
+              <select
+                name="type"
+                defaultValue={filterType}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+              >
+                <option value="ALL">Semua Jenis Pengajuan</option>
+                <option value="PKL">PKL</option>
+                <option value="MAGANG_MANDIRI">Magang Mandiri</option>
+              </select>
+            </div>
+
+            {/* Filter Tahap */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Tahap Pengajuan
+              </label>
+              <select
+                name="stage"
+                defaultValue={filterStage}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+              >
+                <option value="ALL">Semua Tahap</option>
+                <option value="belum_ditanggapi">Belum Ditanggapi</option>
+                <option value="sudah_ditanggapi">Sudah Ditanggapi</option>
+              </select>
+            </div>
+
+            {/* Filter Keputusan */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Keputusan Pengajuan
+              </label>
+              <select
+                name="decision"
+                defaultValue={filterDecision}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+              >
+                <option value="ALL">Semua Keputusan</option>
+                <option value="dalam_proses">Dalam Proses</option>
+                <option value="diterima">Diterima</option>
+                <option value="ditolak">Ditolak</option>
+              </select>
+            </div>
           </div>
 
-          {/* Filter Jenis Pengajuan */}
-          <div>
-            <select
-              name="type"
-              defaultValue={filterType}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
-            >
-              <option value="ALL">Semua Jenis Pengajuan</option>
-              <option value="PKL">PKL</option>
-              <option value="MAGANG_MANDIRI">Magang Mandiri</option>
-            </select>
-          </div>
+          {/* Baris 2: Filter Peserta & Sisa Waktu */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 pt-2 border-t border-gray-100">
+            {/* Filter Institusi */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Institusi Asal
+              </label>
+              <select
+                name="institution"
+                defaultValue={filterInstitution}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+              >
+                <option value="ALL">Semua Institusi</option>
+                {filterInstitutions.map((inst) => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Tahap */}
-          <div>
-            <select
-              name="stage"
-              defaultValue={filterStage}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
-            >
-              <option value="ALL">Semua Tahap</option>
-              <option value="belum_ditanggapi">Belum Ditanggapi</option>
-              <option value="sudah_ditanggapi">Sudah Ditanggapi</option>
-            </select>
-          </div>
+            {/* Filter Jurusan */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Jurusan / Program Studi
+              </label>
+              <select
+                name="major"
+                defaultValue={filterMajor}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+              >
+                <option value="ALL">Semua Jurusan</option>
+                {filterMajors.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Keputusan */}
-          <div>
-            <select
-              name="decision"
-              defaultValue={filterDecision}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
-            >
-              <option value="ALL">Semua Keputusan</option>
-              <option value="dalam_proses">Dalam Proses</option>
-              <option value="diterima">Diterima</option>
-              <option value="ditolak">Ditolak</option>
-            </select>
-          </div>
+            {/* Filter Posisi */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Penempatan Posisi (HC)
+              </label>
+              <select
+                name="position"
+                defaultValue={filterPosition}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+              >
+                <option value="ALL">Semua Posisi</option>
+                {filterPositions.map((pos) => (
+                  <option key={pos.id} value={pos.id}>
+                    {pos.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Filter Status Peserta & Submit */}
-          <div className="flex gap-2">
-            <select
-              name="status"
-              defaultValue={filterStatus}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
-            >
-              <option value="ALL">Status Peserta</option>
-              <option value="belum_mulai">Belum Mulai</option>
-              <option value="sedang_magang">Sedang Magang</option>
-              <option value="sudah_selesai">Sudah Selesai</option>
-              <option value="mengundurkan_diri">Mengundurkan Diri</option>
-            </select>
+            {/* Filter Sisa Masa Magang */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Sisa Masa Magang
+              </label>
+              <select
+                name="remaining"
+                defaultValue={filterRemaining}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+              >
+                <option value="ALL">Semua Sisa Waktu</option>
+                <option value="SEGERA">Segera Selesai (≤ 14 Hari)</option>
+                <option value="TODAY">Selesai Hari Ini (0 Hari)</option>
+                <option value="OVERDUE">Masa Magang Lewat Batas (&lt; 0 Hari)</option>
+                <option value="ACTIVE">Masih Berlangsung (&gt; 14 Hari)</option>
+                <option value="UNSCHEDULED">Belum Dijadwalkan</option>
+              </select>
+            </div>
 
-            <button
-              type="submit"
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-            >
-              Filter
-            </button>
+            {/* Filter Status Peserta & Submit Button */}
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-600 mb-1">
+                Status Peserta
+              </label>
+              <div className="flex gap-2">
+                <select
+                  name="status"
+                  defaultValue={filterStatus}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                >
+                  <option value="ALL">Status Peserta</option>
+                  <option value="belum_mulai">Belum Mulai</option>
+                  <option value="sedang_magang">Sedang Magang</option>
+                  <option value="sudah_selesai">Sudah Selesai</option>
+                  <option value="mengundurkan_diri">Mengundurkan Diri</option>
+                </select>
+
+                <button
+                  type="submit"
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors shrink-0"
+                >
+                  Terapkan
+                </button>
+              </div>
+            </div>
           </div>
         </form>
 
         {isFilterActive && (
-          <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-xs">
-            <span className="text-gray-500">Filter pencarian sedang diterapkan.</span>
+          <div className="flex items-center justify-between border-t border-gray-100 pt-3 text-xs">
+            <span className="text-gray-500 font-medium">Filter pencarian aktif.</span>
             <Link
               href={`/monitoring?tab=${activeTab}`}
-              className="font-medium text-blue-600 hover:text-blue-800"
+              className="font-medium text-blue-600 hover:text-blue-800 underline"
             >
-              Reset Filter
+              Reset Semua Filter
             </Link>
           </div>
         )}
@@ -607,7 +891,7 @@ export default async function MonitoringPage({
             href={`/monitoring?tab=all${query ? `&q=${query}` : ''}`}
             className={`flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
               activeTab === 'all'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 font-bold'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
@@ -621,7 +905,7 @@ export default async function MonitoringPage({
             href={`/monitoring?tab=urgent${query ? `&q=${query}` : ''}`}
             className={`flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
               activeTab === 'urgent'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 font-bold'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
@@ -637,7 +921,7 @@ export default async function MonitoringPage({
             href={`/monitoring?tab=peserta${query ? `&q=${query}` : ''}`}
             className={`flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
               activeTab === 'peserta'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 font-bold'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
@@ -651,7 +935,7 @@ export default async function MonitoringPage({
             href={`/monitoring?tab=pengajuan${query ? `&q=${query}` : ''}`}
             className={`flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors ${
               activeTab === 'pengajuan'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-blue-600 text-blue-600 font-bold'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
             }`}
           >
@@ -669,7 +953,7 @@ export default async function MonitoringPage({
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <span>Pengajuan yang Memerlukan Perhatian</span>
+                <span>Pengajuan yang Memerlukan Perhatian & Tindak Lanjut</span>
                 {filteredUrgent.length > 0 && (
                   <span className="rounded-full bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 text-xs font-bold">
                     {filteredUrgent.length} Butuh Tindakan
@@ -724,7 +1008,7 @@ export default async function MonitoringPage({
                       <th className="px-4 py-3">Tgl Pengajuan</th>
                       <th className="px-4 py-3">Batas Konfirmasi</th>
                       <th className="px-4 py-3">Tahap</th>
-                      <th className="px-4 py-3 text-right">Aksi</th>
+                      <th className="px-4 py-3 text-right">Tindak Lanjut</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
@@ -751,45 +1035,48 @@ export default async function MonitoringPage({
                             </Link>
                           </td>
                           <td className="px-4 py-3.5 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
-                                u.application_type === 'PKL'
-                                  ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                                  : 'bg-teal-50 text-teal-700 border border-teal-200'
-                              }`}
-                            >
-                              {u.application_type}
-                            </span>
+                            <Link href={`/pengajuan/${u.id}`} className="block">
+                              <span
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
+                                  u.application_type === 'PKL'
+                                    ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                    : 'bg-teal-50 text-teal-700 border border-teal-200'
+                                }`}
+                              >
+                                {u.application_type}
+                              </span>
+                            </Link>
                           </td>
                           <td className="px-4 py-3.5 whitespace-nowrap text-gray-600">
-                            {formatDate(u.apply_date)}
+                            <Link href={`/pengajuan/${u.id}`} className="block">
+                              {formatDate(u.apply_date)}
+                            </Link>
                           </td>
                           <td className="px-4 py-3.5 whitespace-nowrap">
-                            {u.confirmation_deadline ? (
-                              <span
-                                className={
-                                  u.urgencyType === 'OVERDUE'
-                                    ? 'font-semibold text-red-600'
-                                    : u.urgencyType === 'UPCOMING_DEADLINE'
-                                    ? 'font-semibold text-amber-600'
-                                    : 'text-gray-600'
-                                }
-                              >
-                                {formatDate(u.confirmation_deadline)}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-gray-400">Tidak ditentukan</span>
-                            )}
+                            <Link href={`/pengajuan/${u.id}`} className="block">
+                              {u.confirmation_deadline ? (
+                                <span className="font-medium text-gray-900">
+                                  {formatDate(u.confirmation_deadline)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-xs italic">
+                                  Tidak ditentukan
+                                </span>
+                              )}
+                            </Link>
                           </td>
                           <td className="px-4 py-3.5 whitespace-nowrap">
-                            {getStageBadge(u.stage_id, u.stage?.name)}
+                            <Link href={`/pengajuan/${u.id}`} className="block">
+                              {getStageBadge(u.stage_id, u.stage?.name)}
+                            </Link>
                           </td>
                           <td className="px-4 py-3.5 whitespace-nowrap text-right">
                             <Link
                               href={`/pengajuan/${u.id}`}
                               className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
                             >
-                              Tindak Lanjuti &rarr;
+                              <span>Tindak Lanjut</span>
+                              <span>&rarr;</span>
                             </Link>
                           </td>
                         </tr>
@@ -802,16 +1089,16 @@ export default async function MonitoringPage({
         </section>
       )}
 
-      {/* TAB CONTENT: 2. MONITORING PESERTA */}
+      {/* TAB CONTENT: 2. MONITORING PESERTA (P1-4: Sisa Masa Magang & Filter Terpadu) */}
       {(activeTab === 'all' || activeTab === 'peserta') && (
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">
-                Monitoring Status Peserta Magang
+                Monitoring Status & Sisa Masa Magang Peserta
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Pemantauan keaktifan, periode pelaksanaan riil, dan penempatan peserta di REDIGMA.
+                Pemantauan sisa waktu pelaksanaan, keaktifan harian, dan posisi penempatan kerja peserta REDIGMA.
               </p>
             </div>
             {activeTab === 'all' && allParts.length > 5 && (
@@ -841,10 +1128,10 @@ export default async function MonitoringPage({
                   />
                 </svg>
                 <p className="text-sm font-medium text-gray-600">
-                  Tidak ada peserta magang yang sesuai filter.
+                  Tidak ada data peserta magang yang sesuai filter.
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Data peserta terdaftar akan tampil otomatis pada tabel ini.
+                  Sesuaikan parameter pencarian atau reset filter untuk menampilkan peserta.
                 </p>
               </div>
             ) : (
@@ -854,8 +1141,10 @@ export default async function MonitoringPage({
                     <tr>
                       <th className="px-4 py-3">Nama Peserta</th>
                       <th className="px-4 py-3">Institusi</th>
-                      <th className="px-4 py-3">Posisi</th>
+                      <th className="px-4 py-3">Jurusan</th>
+                      <th className="px-4 py-3">Penempatan Posisi (HC)</th>
                       <th className="px-4 py-3">Periode Magang</th>
+                      <th className="px-4 py-3">Sisa Masa Magang</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3 text-right">Detail</th>
                     </tr>
@@ -882,7 +1171,7 @@ export default async function MonitoringPage({
                           </td>
                           <td className="px-4 py-3.5">
                             <Link href={`/peserta/${p.id}`} className="block">
-                              <div className="text-gray-900 line-clamp-1">
+                              <div className="text-gray-900 line-clamp-1 font-medium">
                                 {p.application?.institution?.name || '-'}
                               </div>
                               <div className="text-xs text-gray-400">
@@ -890,7 +1179,12 @@ export default async function MonitoringPage({
                               </div>
                             </Link>
                           </td>
-                          <td className="px-4 py-3.5 whitespace-nowrap text-gray-600">
+                          <td className="px-4 py-3.5 whitespace-nowrap text-gray-700">
+                            <Link href={`/peserta/${p.id}`} className="block">
+                              {p.major?.name || '-'}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3.5 whitespace-nowrap text-gray-700">
                             <Link href={`/peserta/${p.id}`} className="block">
                               {p.position?.name || '-'}
                             </Link>
@@ -906,6 +1200,11 @@ export default async function MonitoringPage({
                               ) : (
                                 <span className="text-xs text-gray-400">Belum dijadwalkan</span>
                               )}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            <Link href={`/peserta/${p.id}`} className="block">
+                              {getRemainingDaysBadge(p.remaining_days, p.status_id)}
                             </Link>
                           </td>
                           <td className="px-4 py-3.5 whitespace-nowrap">
@@ -937,10 +1236,10 @@ export default async function MonitoringPage({
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">
-                Daftar Pengajuan Magang
+                Daftar & Status Pengajuan Magang
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Monitoring status alur penerimaan dan kuota peserta untuk setiap berkas pengajuan.
+                Monitoring status alur penerimaan berkas, kuota disetujui, dan akses tindak lanjut seleksi.
               </p>
             </div>
             {activeTab === 'all' && allApps.length > 5 && (
@@ -984,10 +1283,11 @@ export default async function MonitoringPage({
                       <th className="px-4 py-3">Institusi & KOP</th>
                       <th className="px-4 py-3">Jenis</th>
                       <th className="px-4 py-3">Tgl Pengajuan</th>
+                      <th className="px-4 py-3">Batas Konfirmasi</th>
                       <th className="px-4 py-3">Kuota (Ajuan / Acc)</th>
                       <th className="px-4 py-3">Tahap</th>
                       <th className="px-4 py-3">Keputusan</th>
-                      <th className="px-4 py-3 text-right">Detail</th>
+                      <th className="px-4 py-3 text-right">Tindak Lanjut</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
@@ -1028,6 +1328,19 @@ export default async function MonitoringPage({
                               {formatDate(app.apply_date)}
                             </Link>
                           </td>
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            <Link href={`/pengajuan/${app.id}`} className="block">
+                              {app.confirmation_deadline ? (
+                                <span className="font-medium text-gray-800">
+                                  {formatDate(app.confirmation_deadline)}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-xs italic">
+                                  -
+                                </span>
+                              )}
+                            </Link>
+                          </td>
                           <td className="px-4 py-3.5 whitespace-nowrap text-gray-700">
                             <Link href={`/pengajuan/${app.id}`} className="block">
                               <span className="font-medium text-gray-900">
@@ -1052,9 +1365,10 @@ export default async function MonitoringPage({
                           <td className="px-4 py-3.5 whitespace-nowrap text-right">
                             <Link
                               href={`/pengajuan/${app.id}`}
-                              className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
                             >
-                              Lihat &rarr;
+                              <span>Detail</span>
+                              <span>&rarr;</span>
                             </Link>
                           </td>
                         </tr>

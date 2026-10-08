@@ -30,6 +30,10 @@ interface FormDetailRow {
   requested_quota: number | string
   approved_quota: number | string
   notes: string
+  show_major?: boolean
+  show_position?: boolean
+  show_quota?: boolean
+  show_notes?: boolean
 }
 
 interface ApplicationFormProps {
@@ -76,6 +80,12 @@ export function ApplicationForm({
           requested_quota: d.requested_quota ?? '',
           approved_quota: d.approved_quota ?? '',
           notes: d.notes || '',
+          show_major: Boolean(d.major_id),
+          show_position: Boolean(d.requested_position_id),
+          show_quota:
+            (d.requested_quota !== null && d.requested_quota !== undefined) ||
+            (d.approved_quota !== null && d.approved_quota !== undefined),
+          show_notes: Boolean(d.notes && d.notes.trim()),
         }))
       : [
           {
@@ -86,6 +96,10 @@ export function ApplicationForm({
             requested_quota: '',
             approved_quota: '',
             notes: '',
+            show_major: false,
+            show_position: false,
+            show_quota: false,
+            show_notes: false,
           },
         ]
   )
@@ -116,6 +130,10 @@ export function ApplicationForm({
         requested_quota: '',
         approved_quota: '',
         notes: '',
+        show_major: false,
+        show_position: false,
+        show_quota: false,
+        show_notes: false,
       },
     ])
   }
@@ -138,6 +156,74 @@ export function ApplicationForm({
     })
   }
 
+  const handleToggleField = (
+    index: number,
+    field: 'show_major' | 'show_position' | 'show_quota' | 'show_notes',
+    value: boolean
+  ) => {
+    setIsDirty(true)
+    setDetails((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
+  }
+
+  const handleRemoveMajor = (index: number) => {
+    setIsDirty(true)
+    setDetails((prev) => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        show_major: false,
+        major_id: '',
+        new_major_name: '',
+      }
+      return next
+    })
+  }
+
+  const handleRemovePosition = (index: number) => {
+    setIsDirty(true)
+    setDetails((prev) => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        show_position: false,
+        requested_position_id: '',
+        new_position_name: '',
+      }
+      return next
+    })
+  }
+
+  const handleRemoveQuota = (index: number) => {
+    setIsDirty(true)
+    setDetails((prev) => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        show_quota: false,
+        requested_quota: '',
+        approved_quota: '',
+      }
+      return next
+    })
+  }
+
+  const handleRemoveNotes = (index: number) => {
+    setIsDirty(true)
+    setDetails((prev) => {
+      const next = [...prev]
+      next[index] = {
+        ...next[index],
+        show_notes: false,
+        notes: '',
+      }
+      return next
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (isSubmitting) return
@@ -152,31 +238,94 @@ export function ApplicationForm({
       return
     }
 
-    // Validasi rincian: jika memilih tambah baru, pastikan nama diisi
+    // Validasi rincian dengan progressive disclosure rules
     for (let i = 0; i < details.length; i++) {
       const d = details[i]
-      if (d.major_id === 'NEW' && (!d.new_major_name || !d.new_major_name.trim())) {
-        setErrorMessage(
-          `Nama jurusan baru pada Rincian #${i + 1} wajib diisi jika memilih opsi tambah jurusan baru.`
-        )
-        return
+
+      // Jika HC memilih + Tambah Jurusan pada rincian ini, Jurusan menjadi wajib
+      if (d.show_major) {
+        if (!d.major_id || d.major_id === '-- Pilih Jurusan --') {
+          setErrorMessage(
+            details.length === 1
+              ? 'Jurusan wajib dipilih untuk rincian ini.'
+              : `Jurusan wajib dipilih untuk Rincian #${i + 1}.`
+          )
+          return
+        }
+        if (d.major_id === 'NEW' && (!d.new_major_name || !d.new_major_name.trim())) {
+          setErrorMessage(
+            details.length === 1
+              ? 'Nama jurusan baru wajib diisi jika memilih opsi tambah jurusan baru.'
+              : `Nama jurusan baru pada Rincian #${i + 1} wajib diisi jika memilih opsi tambah jurusan baru.`
+          )
+          return
+        }
       }
+
+      // Jika posisi baru diinput teks manual
       if (
+        d.show_position &&
         d.requested_position_id === 'NEW' &&
         (!d.new_position_name || !d.new_position_name.trim())
       ) {
         setErrorMessage(
-          `Nama posisi baru pada Rincian #${i + 1} wajib diisi jika memilih opsi tambah posisi baru.`
+          details.length === 1
+            ? 'Nama posisi baru wajib diisi jika memilih opsi tambah posisi baru.'
+            : `Nama posisi baru pada Rincian #${i + 1} wajib diisi jika memilih opsi tambah posisi baru.`
         )
         return
+      }
+
+      // Validasi kuota jika diisi
+      if (d.show_quota) {
+        if (d.requested_quota !== '' && Number(d.requested_quota) < 0) {
+          setErrorMessage(
+            details.length === 1
+              ? 'Kuota yang diajukan tidak boleh bernilai negatif.'
+              : `Kuota yang diajukan pada Rincian #${i + 1} tidak boleh bernilai negatif.`
+          )
+          return
+        }
+        if (d.approved_quota !== '' && Number(d.approved_quota) < 0) {
+          setErrorMessage(
+            details.length === 1
+              ? 'Kuota yang disetujui tidak boleh bernilai negatif.'
+              : `Kuota yang disetujui pada Rincian #${i + 1} tidak boleh bernilai negatif.`
+          )
+          return
+        }
       }
     }
 
     setIsSubmitting(true)
     setErrorMessage(null)
 
+    // Filter & bersihkan details sebelum dikirim ke server action
+    const sanitizedDetails = details
+      .filter(
+        (d) =>
+          d.show_major ||
+          d.show_position ||
+          d.show_quota ||
+          d.show_notes ||
+          d.major_id ||
+          d.requested_position_id ||
+          d.requested_quota !== '' ||
+          d.approved_quota !== '' ||
+          d.notes
+      )
+      .map((d) => ({
+        major_id: d.show_major ? d.major_id : null,
+        new_major_name: d.show_major ? d.new_major_name : null,
+        requested_position_id: d.show_position ? d.requested_position_id : null,
+        new_position_name: d.show_position ? d.new_position_name : null,
+        requested_quota: d.show_quota && d.requested_quota !== '' ? d.requested_quota : null,
+        approved_quota: d.show_quota && d.approved_quota !== '' ? d.approved_quota : null,
+        notes: d.show_notes ? d.notes : null,
+      }))
+
     const formData = new FormData(e.currentTarget)
-    formData.set('details_json', JSON.stringify(details))
+    formData.set('details_json', JSON.stringify(sanitizedDetails))
 
     try {
       let res: ActionResponse
@@ -265,28 +414,31 @@ export function ApplicationForm({
           </div>
 
           {/* Institusi */}
-          <div className="sm:col-span-2">
-            <div className="flex items-center justify-between">
+          <div className="sm:col-span-1 lg:col-span-2">
+            <div className="flex items-center justify-between gap-2 sm:max-w-md">
               <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
                 Institusi Pendidikan <span className="text-red-500">*</span>
               </label>
               <button
                 type="button"
                 onClick={() => setIsNewInst(!isNewInst)}
-                className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
               >
                 {isNewInst ? 'Pilih dari Daftar' : '+ Tambah Institusi Baru'}
               </button>
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Jika belum tersedia, tambahkan institusi baru.
+            </p>
 
             {isNewInst ? (
-              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-1 lg:grid-cols-3">
                 <input
                   type="hidden"
                   name="institution_id"
                   value="NEW"
                 />
-                <div className="sm:col-span-2">
+                <div className="lg:col-span-2">
                   <input
                     type="text"
                     name="new_institution_name"
@@ -463,6 +615,19 @@ export function ApplicationForm({
               defaultValue={initialData?.confirmation_deadline || ''}
               containerClassName="mt-2"
             />
+            <p className="mt-1 text-xs text-gray-500 sm:hidden">
+              Batas terakhir HC memberikan konfirmasi kepada pemohon.
+            </p>
+          </div>
+
+          {/* Explanatory Context untuk Batas Waktu Konfirmasi (Desktop/Tablet) */}
+          <div className="hidden sm:flex sm:col-span-1 lg:col-span-2 items-center pt-6">
+            <p className="flex items-center gap-1.5 text-xs text-gray-500">
+              <svg className="h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Batas terakhir HC memberikan konfirmasi kepada pemohon.</span>
+            </p>
           </div>
         </div>
       </div>
@@ -546,7 +711,7 @@ export function ApplicationForm({
               Rincian Jurusan, Posisi & Kuota
             </h2>
             <p className="mt-1 text-xs text-gray-500">
-              Sumber data kuota peserta berada pada rincian ini.
+              Tambahkan informasi jurusan, posisi, dan kuota yang tersedia dari pengajuan.
             </p>
           </div>
           <button
@@ -562,171 +727,351 @@ export function ApplicationForm({
         </div>
 
         <div className="mt-6 space-y-4">
-          {details.map((row, idx) => (
-            <div
-              key={idx}
-              className="relative rounded-lg border border-gray-200 bg-gray-50/70 p-4 transition-all"
-            >
-              <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-3">
-                <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Rincian #{idx + 1}
-                </span>
-                {details.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveDetail(idx)}
-                    className="text-xs font-medium text-red-600 hover:text-red-800"
-                  >
-                    Hapus
-                  </button>
+          {details.map((row, idx) => {
+            const hasAnyField =
+              Boolean(row.show_major) ||
+              Boolean(row.show_position) ||
+              Boolean(row.show_quota) ||
+              Boolean(row.show_notes)
+
+            return (
+              <div
+                key={idx}
+                className="relative rounded-xl border border-gray-200 bg-gray-50/70 p-4 sm:p-5 transition-all shadow-2xs"
+              >
+                {/* Header Rincian */}
+                <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-3.5">
+                  <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    Rincian #{idx + 1}
+                  </span>
+                  {details.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDetail(idx)}
+                      className="text-xs font-semibold text-red-600 hover:text-red-800 transition-colors cursor-pointer"
+                    >
+                      Hapus Rincian
+                    </button>
+                  )}
+                </div>
+
+                {hasAnyField ? (
+                  <div className="space-y-4">
+                    {/* Baris 1: Jurusan & Posisi yang Diminta */}
+                    {(row.show_major || row.show_position) && (
+                      <div
+                        className={`grid grid-cols-1 ${
+                          row.show_major && row.show_position ? 'sm:grid-cols-2' : ''
+                        } gap-4`}
+                      >
+                        {/* Field Jurusan */}
+                        {row.show_major && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
+                                Jurusan <span className="text-red-500">*</span>
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveMajor(idx)}
+                                className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                                title="Batal / Sembunyikan jurusan"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                            {row.major_id === 'NEW' ? (
+                              <div className="space-y-1.5">
+                                <input
+                                  type="text"
+                                  placeholder="Nama jurusan baru..."
+                                  value={row.new_major_name}
+                                  onChange={(e) =>
+                                    handleDetailChange(idx, 'new_major_name', e.target.value)
+                                  }
+                                  autoComplete="off"
+                                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                                  required
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleDetailChange(idx, 'major_id', '')}
+                                  className="text-xs text-blue-600 hover:underline cursor-pointer"
+                                >
+                                  ← Pilih dari daftar
+                                </button>
+                              </div>
+                            ) : (
+                              <select
+                                value={row.major_id}
+                                onChange={(e) =>
+                                  handleDetailChange(idx, 'major_id', e.target.value)
+                                }
+                                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                                required
+                              >
+                                <option value="">-- Pilih Jurusan --</option>
+                                {majors.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.name} {m.code ? `(${m.code})` : ''}
+                                  </option>
+                                ))}
+                                <option value="NEW">+ Tambah Jurusan Baru</option>
+                              </select>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Field Posisi yang Diminta */}
+                        {row.show_position && (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
+                                Posisi yang Diminta
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePosition(idx)}
+                                className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                                title="Batal / Sembunyikan posisi"
+                              >
+                                Hapus
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-gray-500 pb-0.5">
+                              Posisi yang diajukan oleh pemohon. Dapat dikosongkan jika belum ditentukan.
+                            </p>
+                            {row.requested_position_id === 'NEW' ? (
+                              <div className="space-y-1.5">
+                                <input
+                                  type="text"
+                                  placeholder="Nama posisi baru..."
+                                  value={row.new_position_name}
+                                  onChange={(e) =>
+                                    handleDetailChange(idx, 'new_position_name', e.target.value)
+                                  }
+                                  autoComplete="off"
+                                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDetailChange(idx, 'requested_position_id', '')
+                                  }
+                                  className="text-xs text-blue-600 hover:underline cursor-pointer"
+                                >
+                                  ← Pilih dari daftar
+                                </button>
+                              </div>
+                            ) : (
+                              <select
+                                value={row.requested_position_id}
+                                onChange={(e) =>
+                                  handleDetailChange(idx, 'requested_position_id', e.target.value)
+                                }
+                                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                              >
+                                <option value="">-- Tidak ditentukan --</option>
+                                {positions.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                                <option value="NEW">+ Tambah Posisi Baru</option>
+                              </select>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Baris 2: Kuota */}
+                    {row.show_quota && (
+                      <div className="rounded-lg border border-gray-200/80 bg-white p-3.5 space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                          <span className="text-xs font-semibold uppercase tracking-wider text-gray-700">
+                            Informasi Kuota
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveQuota(idx)}
+                            className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                            title="Batal / Sembunyikan kuota"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Kuota Diajukan
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="Contoh: 4"
+                              value={row.requested_quota}
+                              onChange={(e) =>
+                                handleDetailChange(idx, 'requested_quota', e.target.value)
+                              }
+                              autoComplete="off"
+                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Kuota Disetujui
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="Contoh: 2"
+                              value={row.approved_quota}
+                              onChange={(e) =>
+                                handleDetailChange(idx, 'approved_quota', e.target.value)
+                              }
+                              autoComplete="off"
+                              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                            />
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              Isi setelah kuota resmi ditentukan oleh HC.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Baris 3: Catatan Khusus */}
+                    {row.show_notes && (
+                      <div className="rounded-lg border border-gray-200/80 bg-white p-3 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-medium text-gray-700">
+                            Catatan Khusus Rincian (Opsional)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveNotes(idx)}
+                            className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                            title="Batal / Sembunyikan catatan"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Catatan khusus rincian ini (opsional)..."
+                          value={row.notes}
+                          onChange={(e) => handleDetailChange(idx, 'notes', e.target.value)}
+                          autoComplete="off"
+                          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                        />
+                      </div>
+                    )}
+
+                    {/* Baris 4: Progressive Disclosure Action Buttons untuk field yang belum ditambahkan */}
+                    {(!row.show_major || !row.show_position || !row.show_quota || !row.show_notes) && (
+                      <div className="pt-2.5 border-t border-gray-200/80 flex flex-wrap items-center gap-2">
+                        {!row.show_major && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleField(idx, 'show_major', true)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-blue-400 bg-blue-50/50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100/70 hover:border-blue-500 transition-colors cursor-pointer"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Tambah Jurusan
+                          </button>
+                        )}
+                        {!row.show_position && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleField(idx, 'show_position', true)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer"
+                          >
+                            <svg className="h-3.5 w-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Tambah Posisi
+                          </button>
+                        )}
+                        {!row.show_quota && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleField(idx, 'show_quota', true)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer"
+                          >
+                            <svg className="h-3.5 w-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Tambah Kuota
+                          </button>
+                        )}
+                        {!row.show_notes && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleField(idx, 'show_notes', true)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors cursor-pointer"
+                          >
+                            <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Tambah Catatan
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Initial State saat belum ada field yang ditambahkan */
+                  <div className="py-2 text-left">
+                    <p className="text-xs font-semibold text-gray-700">
+                      Tambahkan informasi yang tersedia dari pengajuan.
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Informasi yang belum diketahui dapat dilengkapi kemudian.
+                    </p>
+
+                    <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleField(idx, 'show_major', true)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-blue-400 bg-blue-50/60 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-500 transition-colors cursor-pointer"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Jurusan
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleField(idx, 'show_position', true)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer"
+                      >
+                        <svg className="h-3.5 w-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Posisi
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleField(idx, 'show_quota', true)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors cursor-pointer"
+                      >
+                        <svg className="h-3.5 w-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Tambah Kuota
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {/* Jurusan */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700">
-                    Jurusan
-                  </label>
-                  {row.major_id === 'NEW' ? (
-                    <div className="mt-1.5 space-y-1.5">
-                      <input
-                        type="text"
-                        placeholder="Nama jurusan baru..."
-                        value={row.new_major_name}
-                        onChange={(e) =>
-                          handleDetailChange(idx, 'new_major_name', e.target.value)
-                        }
-                        autoComplete="off"
-                        className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleDetailChange(idx, 'major_id', '')}
-                        className="text-[11px] text-blue-600 hover:underline"
-                      >
-                        Pilih dari daftar
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-1.5 space-y-1">
-                      <select
-                        value={row.major_id}
-                        onChange={(e) =>
-                          handleDetailChange(idx, 'major_id', e.target.value)
-                        }
-                        className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                      >
-                        <option value="">-- Pilih Jurusan --</option>
-                        {majors.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} {m.code ? `(${m.code})` : ''}
-                          </option>
-                        ))}
-                        <option value="NEW">+ Tambah Jurusan Baru</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                {/* Posisi yang Diminta */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700">
-                    Posisi yang Diminta
-                  </label>
-                  {row.requested_position_id === 'NEW' ? (
-                    <div className="mt-1.5 space-y-1.5">
-                      <input
-                        type="text"
-                        placeholder="Nama posisi baru..."
-                        value={row.new_position_name}
-                        onChange={(e) =>
-                          handleDetailChange(idx, 'new_position_name', e.target.value)
-                        }
-                        autoComplete="off"
-                        className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDetailChange(idx, 'requested_position_id', '')
-                        }
-                        className="text-[11px] text-blue-600 hover:underline"
-                      >
-                        Pilih dari daftar
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-1.5 space-y-1">
-                      <select
-                        value={row.requested_position_id}
-                        onChange={(e) =>
-                          handleDetailChange(idx, 'requested_position_id', e.target.value)
-                        }
-                        className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                      >
-                        <option value="">-- Tidak ditentukan --</option>
-                        {positions.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                        <option value="NEW">+ Tambah Posisi Baru</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                {/* Kuota yang Diajukan */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700">
-                    Kuota Diajukan
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Contoh: 4"
-                    value={row.requested_quota}
-                    onChange={(e) =>
-                      handleDetailChange(idx, 'requested_quota', e.target.value)
-                    }
-                    autoComplete="off"
-                    className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                  />
-                </div>
-
-                {/* Kuota yang Disetujui */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700">
-                    Kuota Disetujui
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Contoh: 2"
-                    value={row.approved_quota}
-                    onChange={(e) =>
-                      handleDetailChange(idx, 'approved_quota', e.target.value)
-                    }
-                    autoComplete="off"
-                    className="mt-1.5 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              {/* Catatan Per Rincian */}
-              <div className="mt-3">
-                <input
-                  type="text"
-                  placeholder="Catatan khusus rincian ini (opsional)..."
-                  value={row.notes}
-                  onChange={(e) => handleDetailChange(idx, 'notes', e.target.value)}
-                  autoComplete="off"
-                  className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                />
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 

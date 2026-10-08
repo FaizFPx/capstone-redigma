@@ -49,6 +49,7 @@ export interface MonitoringParticipantItem {
   actual_end_date: string | null
   status_id: string
   notes: string | null
+  remaining_days?: number | null
   application: {
     id: string
     application_type: string

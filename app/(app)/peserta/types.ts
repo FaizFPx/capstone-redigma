@@ -50,6 +50,12 @@ export interface ApplicationOption {
   application_type: ApplicationType
   apply_date: string
   kop_letter_number?: string | null
+  decision_id?: string | null
+  stage_id?: string | null
+  decision?: {
+    id: string
+    name: string
+  } | null
   institution?: {
     id: string
     name: string

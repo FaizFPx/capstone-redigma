@@ -556,3 +556,106 @@ export async function deleteApplicationAction(
   return { success: true }
 }
 
+export async function quickUpdateApplicationStatusAction(
+  applicationId: string,
+  stage_id: string,
+  decision_id: string,
+  change_notes?: string
+): Promise<ActionResponse> {
+  const supabase = await createClient()
+
+  // 1. Validasi authenticated user
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'Anda harus login untuk melakukan tindakan ini.' }
+  }
+
+  // 2. Validasi user adalah HC aktif
+  const { data: publicUser } = await supabase
+    .from('users')
+    .select('id, role, is_active')
+    .or(`id.eq.${user.id},email.eq.${user.email}`)
+    .maybeSingle()
+
+  if (
+    !publicUser ||
+    !publicUser.is_active ||
+    !['hc_admin', 'hc_staff'].includes(publicUser.role)
+  ) {
+    return { error: 'Anda tidak memiliki izin untuk mengubah status pengajuan.' }
+  }
+
+  // 3. Validasi ID pengajuan
+  const cleanAppId = parseOptionalUuid(applicationId)
+  if (!cleanAppId) {
+    return { error: 'ID pengajuan tidak valid.' }
+  }
+
+  const cleanStageId = String(stage_id || '').trim()
+  const cleanDecisionId = String(decision_id || '').trim()
+
+  if (!cleanStageId || !cleanDecisionId) {
+    return { error: 'Tahap dan keputusan pengajuan wajib dipilih.' }
+  }
+
+  // 4. Ambil data existing untuk verifikasi dan logging
+  const { data: existingApp, error: fetchErr } = await supabase
+    .from('applications')
+    .select('id, stage_id, decision_id')
+    .eq('id', cleanAppId)
+    .single()
+
+  if (fetchErr || !existingApp) {
+    return { error: 'Data pengajuan tidak ditemukan.' }
+  }
+
+  const isChanged =
+    existingApp.stage_id !== cleanStageId || existingApp.decision_id !== cleanDecisionId
+
+  if (isChanged) {
+    // 5. Update record di applications
+    const { error: updateError } = await supabase
+      .from('applications')
+      .update({
+        stage_id: cleanStageId,
+        decision_id: cleanDecisionId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', cleanAppId)
+
+    if (updateError) {
+      console.error('Quick update application status error:', updateError)
+      return { error: `Gagal memperbarui status pengajuan: ${updateError.message}` }
+    }
+
+    // 6. Catat log perubahan status di application_status_logs
+    try {
+      await supabase.from('application_status_logs').insert({
+        application_id: cleanAppId,
+        previous_stage_id: existingApp.stage_id,
+        new_stage_id: cleanStageId,
+        previous_decision_id: existingApp.decision_id,
+        new_decision_id: cleanDecisionId,
+        changed_by_user_id: publicUser.id,
+        change_notes:
+          change_notes?.trim() ||
+          'Status pengajuan diperbarui melalui Quick Status Transition.',
+      })
+    } catch (logErr) {
+      console.warn('Logging quick status change warning:', logErr)
+    }
+  }
+
+  // 7. Revalidate
+  revalidatePath('/pengajuan')
+  revalidatePath(`/pengajuan/${cleanAppId}`)
+  revalidatePath('/dashboard')
+  revalidatePath('/monitoring')
+  revalidatePath('/riwayat')
+
+  return { success: true, id: cleanAppId }
+}
+

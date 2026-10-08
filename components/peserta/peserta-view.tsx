@@ -646,7 +646,7 @@ export function PesertaView({
                         <th className="px-4 py-3.5">Nama Peserta</th>
                         <th className="px-4 py-3.5 min-w-[180px] sm:min-w-[200px]">Institusi</th>
                         <th className="px-4 py-3.5">Jurusan</th>
-                        <th className="px-4 py-3.5">Posisi Penugasan</th>
+                        <th className="px-4 py-3.5" title="Penempatan Posisi / Divisi (Keputusan HC)">Penempatan Posisi (HC)</th>
                         <th className="px-4 py-3.5 whitespace-nowrap">Tanggal Selesai</th>
                         <th className="px-4 py-3.5 whitespace-nowrap">Sisa Magang</th>
                         {activeTab === 'ALL' && (
