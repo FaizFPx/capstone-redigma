@@ -37,7 +37,19 @@ interface FormattedParticipant {
 
 const ITEMS_PER_PAGE = 10
 
-function RemainingBadge({ date }: { date?: string | null }) {
+function RemainingBadge({
+  date,
+  statusId,
+}: {
+  date?: string | null
+  statusId?: string
+}) {
+  // Hanya peserta yang berstatus 'sedang_magang' yang memiliki sisa masa magang aktif.
+  // Peserta yang 'belum_mulai' (belum aktif), 'sudah_selesai', atau 'mengundurkan_diri' tidak menampilkan sisa magang (-).
+  if (statusId !== 'sedang_magang') {
+    return <span className="text-gray-400 font-medium">-</span>
+  }
+
   const days = calculateRemainingDays(date)
   const { text, urgency } = getRemainingDaysInfo(days)
 
@@ -273,6 +285,10 @@ export function PesertaView({
 
       // 5. Filter Sisa Magang
       if (selectedRemaining !== 'ALL') {
+        // Hanya peserta yang berstatus 'sedang_magang' yang memiliki sisa masa magang aktif
+        if (item.status_id !== 'sedang_magang') {
+          return false
+        }
         const days = calculateRemainingDays(item.actual_end_date)
         if (!matchesRemainingDaysFilter(days, selectedRemaining)) {
           return false
@@ -756,7 +772,10 @@ export function PesertaView({
                                 href={`/peserta/${item.id}`}
                                 className="block"
                               >
-                                <RemainingBadge date={item.actual_end_date} />
+                                <RemainingBadge
+                                  date={item.actual_end_date}
+                                  statusId={item.status_id}
+                                />
                               </Link>
                             </td>
 

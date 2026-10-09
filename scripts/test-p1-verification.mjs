@@ -54,6 +54,37 @@ if (daysOverdue !== -3) {
 
 console.log('PASS: Sisa masa magang calculation verified!\n')
 
+// 1b. Remaining Days Display Rule per Participant Status
+console.log('--- Test 1b: Remaining Days Display Rule per Status ---')
+function shouldDisplayRemainingDays(statusId) {
+  return statusId === 'sedang_magang'
+}
+
+if (shouldDisplayRemainingDays('belum_mulai')) {
+  console.error('FAIL: belum_mulai should NOT display remaining days')
+  process.exit(1)
+}
+console.log('Status: belum_mulai -> display remaining days: false (shows -)')
+
+if (!shouldDisplayRemainingDays('sedang_magang')) {
+  console.error('FAIL: sedang_magang SHOULD display remaining days')
+  process.exit(1)
+}
+console.log('Status: sedang_magang -> display remaining days: true')
+
+if (shouldDisplayRemainingDays('sudah_selesai')) {
+  console.error('FAIL: sudah_selesai should NOT display remaining days')
+  process.exit(1)
+}
+console.log('Status: sudah_selesai -> display remaining days: false (shows -)')
+
+if (shouldDisplayRemainingDays('mengundurkan_diri')) {
+  console.error('FAIL: mengundurkan_diri should NOT display remaining days')
+  process.exit(1)
+}
+console.log('Status: mengundurkan_diri -> display remaining days: false (shows -)')
+console.log('PASS: Remaining days status display rules verified!\n')
+
 // 2. Participant Lifecycle Transitions
 console.log('--- Test 2: Participant Lifecycle Transition Rules ---')
 function getParticipantActionConfig(statusId) {

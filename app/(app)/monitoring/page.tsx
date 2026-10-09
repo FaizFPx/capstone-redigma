@@ -286,7 +286,10 @@ export default async function MonitoringPage({
 
   const filteredParticipants: MonitoringParticipantItem[] = allParts
     .map((p) => {
-      const remainingDays = calculateRemainingDays(p.actual_end_date)
+      const remainingDays =
+        p.status_id === 'sedang_magang'
+          ? calculateRemainingDays(p.actual_end_date)
+          : null
       return {
         id: p.id,
         name: p.name,
@@ -324,6 +327,9 @@ export default async function MonitoringPage({
 
       // Filter Sisa Masa Magang
       if (filterRemaining !== 'ALL') {
+        if (p.status_id !== 'sedang_magang') {
+          return false
+        }
         const days = p.remaining_days
         if (filterRemaining === 'OVERDUE' && (days === null || days >= 0)) {
           return false
@@ -452,6 +458,11 @@ export default async function MonitoringPage({
     days: number | null | undefined,
     statusId?: string
   ) => {
+    if (statusId === 'belum_mulai') {
+      return (
+        <span className="text-gray-400 font-medium text-xs">-</span>
+      )
+    }
     if (statusId === 'sudah_selesai') {
       return (
         <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200">
