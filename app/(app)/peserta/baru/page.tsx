@@ -54,8 +54,8 @@ export default async function TambahPesertaPage({
       `
       ),
     supabase.from('participants').select('id, application_detail_id'),
-    supabase.from('majors').select('id, name, code').order('name'),
-    supabase.from('positions').select('id, name').order('name'),
+    supabase.from('majors').select('id, name, code, is_active').order('name'),
+    supabase.from('positions').select('id, name, is_active').order('name'),
     supabase
       .from('internship_statuses')
       .select('id, name, is_active_intern')

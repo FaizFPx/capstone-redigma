@@ -106,6 +106,19 @@ export async function createApplicationAction(
     return { error: 'Institusi wajib dipilih atau diisi.' }
   }
 
+  // Validasi status aktif institusi terpilih
+  const { data: instCheck } = await supabase
+    .from('institutions')
+    .select('id, name, is_active')
+    .eq('id', institution_id)
+    .maybeSingle()
+
+  if (instCheck && !instCheck.is_active) {
+    return {
+      error: `Institusi "${instCheck.name}" sedang berstatus nonaktif dan tidak dapat dipilih.`,
+    }
+  }
+
   // 4. Parse & validasi awal detail rows sebelum insert
   const detailsJson = String(formData.get('details_json') || '[]')
   let parsedDetails: Array<{
@@ -122,6 +135,39 @@ export async function createApplicationAction(
     parsedDetails = JSON.parse(detailsJson)
   } catch {
     return { error: 'Format rincian pengajuan tidak valid.' }
+  }
+
+  // Validasi status aktif jurusan dan posisi pada rincian
+  for (const item of parsedDetails) {
+    const cleanMajorId = parseOptionalUuid(item.major_id)
+    if (cleanMajorId && cleanMajorId !== 'NEW') {
+      const { data: mCheck } = await supabase
+        .from('majors')
+        .select('id, name, is_active')
+        .eq('id', cleanMajorId)
+        .maybeSingle()
+
+      if (mCheck && !mCheck.is_active) {
+        return {
+          error: `Jurusan "${mCheck.name}" sedang berstatus nonaktif dan tidak dapat dipilih.`,
+        }
+      }
+    }
+
+    const cleanPosId = parseOptionalUuid(item.requested_position_id)
+    if (cleanPosId && cleanPosId !== 'NEW') {
+      const { data: pCheck } = await supabase
+        .from('positions')
+        .select('id, name, is_active')
+        .eq('id', cleanPosId)
+        .maybeSingle()
+
+      if (pCheck && !pCheck.is_active) {
+        return {
+          error: `Posisi "${pCheck.name}" sedang berstatus nonaktif dan tidak dapat dipilih.`,
+        }
+      }
+    }
   }
 
   // 4b. Pengisian jurusan pada rincian bersifat opsional (dapat berupa NULL)
@@ -288,7 +334,7 @@ export async function updateApplicationAction(
   // 2. Ambil data existing untuk perbandingan log
   const { data: existingApp } = await supabase
     .from('applications')
-    .select('stage_id, decision_id')
+    .select('stage_id, decision_id, institution_id')
     .eq('id', applicationId)
     .single()
 
@@ -352,6 +398,21 @@ export async function updateApplicationAction(
     return { error: 'Institusi wajib dipilih atau diisi.' }
   }
 
+  // Periksa apakah institusi diubah ke institusi lain yang nonaktif
+  if (institution_id && institution_id !== existingApp?.institution_id) {
+    const { data: instCheck } = await supabase
+      .from('institutions')
+      .select('id, name, is_active')
+      .eq('id', institution_id)
+      .maybeSingle()
+
+    if (instCheck && !instCheck.is_active) {
+      return {
+        error: `Institusi "${instCheck.name}" sedang berstatus nonaktif dan tidak dapat dipilih.`,
+      }
+    }
+  }
+
   // 3. Update tabel applications
   const { error: updateError } = await supabase
     .from('applications')
@@ -392,6 +453,41 @@ export async function updateApplicationAction(
       approved_quota?: number | string | null
       notes?: string | null
     }>
+
+    // Validasi status aktif jurusan dan posisi pada rincian update
+    if (Array.isArray(details) && details.length > 0) {
+      for (const item of details) {
+        const cleanMajorId = parseOptionalUuid(item.major_id)
+        if (cleanMajorId && cleanMajorId !== 'NEW') {
+          const { data: mCheck } = await supabase
+            .from('majors')
+            .select('id, name, is_active')
+            .eq('id', cleanMajorId)
+            .maybeSingle()
+
+          if (mCheck && !mCheck.is_active) {
+            return {
+              error: `Jurusan "${mCheck.name}" sedang berstatus nonaktif dan tidak dapat dipilih.`,
+            }
+          }
+        }
+
+        const cleanPosId = parseOptionalUuid(item.requested_position_id)
+        if (cleanPosId && cleanPosId !== 'NEW') {
+          const { data: pCheck } = await supabase
+            .from('positions')
+            .select('id, name, is_active')
+            .eq('id', cleanPosId)
+            .maybeSingle()
+
+          if (pCheck && !pCheck.is_active) {
+            return {
+              error: `Posisi "${pCheck.name}" sedang berstatus nonaktif dan tidak dapat dipilih.`,
+            }
+          }
+        }
+      }
+    }
 
     // Pengisian jurusan pada rincian bersifat opsional (dapat berupa NULL)
 

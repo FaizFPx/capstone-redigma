@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { DateInput } from '@/components/ui/date-input'
@@ -69,6 +69,14 @@ export function ApplicationForm({
   )
   const [newInstName, setNewInstName] = useState<string>('')
   const [newInstType, setNewInstType] = useState<string>('SMK')
+
+  // Filter institusi agar hanya yang berstatus aktif yang dapat dipilih baru.
+  // Institusi nonaktif hanya dimunculkan jika memang sudah terpilih sebelumnya.
+  const availableInstitutions = useMemo(() => {
+    return institutions.filter(
+      (inst) => inst.is_active !== false || inst.id === selectedInstId
+    )
+  }, [institutions, selectedInstId])
 
   const [details, setDetails] = useState<FormDetailRow[]>(
     initialData?.details && initialData.details.length > 0
@@ -479,14 +487,14 @@ export function ApplicationForm({
                 className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                 required
               >
-                {institutions.length === 0 ? (
+                {availableInstitutions.length === 0 ? (
                   <option value="NEW">Belum ada institusi (Gunakan opsi Tambah)</option>
                 ) : (
                   <>
                     <option value="">-- Pilih Institusi --</option>
-                    {institutions.map((inst) => (
+                    {availableInstitutions.map((inst) => (
                       <option key={inst.id} value={inst.id}>
-                        {inst.name} ({inst.type})
+                        {inst.name} ({inst.type}){inst.is_active === false ? ' (Nonaktif)' : ''}
                       </option>
                     ))}
                   </>
@@ -810,11 +818,13 @@ export function ApplicationForm({
                                 required
                               >
                                 <option value="">-- Pilih Jurusan --</option>
-                                {majors.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.name} {m.code ? `(${m.code})` : ''}
-                                  </option>
-                                ))}
+                                {majors
+                                  .filter((m) => m.is_active !== false || m.id === row.major_id)
+                                  .map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.name} {m.code ? `(${m.code})` : ''}{m.is_active === false ? ' (Nonaktif)' : ''}
+                                    </option>
+                                  ))}
                                 <option value="NEW">+ Tambah Jurusan Baru</option>
                               </select>
                             )}
@@ -871,11 +881,13 @@ export function ApplicationForm({
                                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
                               >
                                 <option value="">-- Tidak ditentukan --</option>
-                                {positions.map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                  </option>
-                                ))}
+                                {positions
+                                  .filter((p) => p.is_active !== false || p.id === row.requested_position_id)
+                                  .map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.name}{p.is_active === false ? ' (Nonaktif)' : ''}
+                                    </option>
+                                  ))}
                                 <option value="NEW">+ Tambah Posisi Baru</option>
                               </select>
                             )}

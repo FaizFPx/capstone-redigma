@@ -4,17 +4,20 @@ export interface Institution {
   id: string
   name: string
   type: string
+  is_active?: boolean
 }
 
 export interface Major {
   id: string
   name: string
   code?: string | null
+  is_active?: boolean
 }
 
 export interface Position {
   id: string
   name: string
+  is_active?: boolean
 }
 
 export interface UserSummary {

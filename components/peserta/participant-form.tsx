@@ -191,6 +191,26 @@ export function ParticipantForm({
 
   const isSubmitBlocked = selectedQuotaInfo?.isFull === true
 
+  // Filter posisi dan jurusan agar hanya yang aktif yang dapat dipilih baru.
+  // Posisi/jurusan nonaktif hanya ditampilkan jika memang sudah terpilih sebelumnya.
+  const availablePositionsForRequest = useMemo(() => {
+    return positions.filter(
+      (p) => p.is_active !== false || p.id === positionReqId
+    )
+  }, [positions, positionReqId])
+
+  const availablePositionsForHc = useMemo(() => {
+    return positions.filter(
+      (p) => p.is_active !== false || p.id === positionHcId
+    )
+  }, [positions, positionHcId])
+
+  const availableMajors = useMemo(() => {
+    return majors.filter(
+      (m) => m.is_active !== false || m.id === selectedMajorId
+    )
+  }, [majors, selectedMajorId])
+
   // Saat detail pengajuan dipilih, otomatis bantu isi jurusan & posisi jika belum ada
   const handleDetailSelect = (detailId: string) => {
     setIsDirty(true)
@@ -619,9 +639,9 @@ export function ParticipantForm({
               className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             >
               <option value="">-- Pilih Jurusan --</option>
-              {majors.map((m) => (
+              {availableMajors.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name} {m.code ? `(${m.code})` : ''}
+                  {m.name} {m.code ? `(${m.code})` : ''}{m.is_active === false ? ' (Nonaktif)' : ''}
                 </option>
               ))}
             </select>
@@ -642,9 +662,9 @@ export function ParticipantForm({
               className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             >
               <option value="">-- Belum Ditentukan --</option>
-              {positions.map((p) => (
+              {availablePositionsForRequest.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.name}{p.is_active === false ? ' (Nonaktif)' : ''}
                 </option>
               ))}
             </select>
@@ -665,9 +685,9 @@ export function ParticipantForm({
               className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             >
               <option value="">-- Belum Ditetapkan HC --</option>
-              {positions.map((p) => (
+              {availablePositionsForHc.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.name}{p.is_active === false ? ' (Nonaktif)' : ''}
                 </option>
               ))}
             </select>

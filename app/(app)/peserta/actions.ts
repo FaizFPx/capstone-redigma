@@ -123,6 +123,51 @@ export async function createParticipantAction(
     }
   }
 
+  // Validasi posisi permohonan aktif jika dipilih
+  if (positioning_by_request_id) {
+    const { data: posReq } = await supabase
+      .from('positions')
+      .select('id, name, is_active')
+      .eq('id', positioning_by_request_id)
+      .maybeSingle()
+
+    if (posReq && !posReq.is_active) {
+      return {
+        error: `Posisi permohonan "${posReq.name}" sedang nonaktif dan tidak dapat dipilih.`,
+      }
+    }
+  }
+
+  // Validasi posisi penempatan HC aktif jika dipilih
+  if (positioning_by_hc_id) {
+    const { data: posHc } = await supabase
+      .from('positions')
+      .select('id, name, is_active')
+      .eq('id', positioning_by_hc_id)
+      .maybeSingle()
+
+    if (posHc && !posHc.is_active) {
+      return {
+        error: `Posisi penempatan HC "${posHc.name}" sedang nonaktif dan tidak dapat dipilih.`,
+      }
+    }
+  }
+
+  // Validasi jurusan aktif jika dipilih
+  if (major_id) {
+    const { data: maj } = await supabase
+      .from('majors')
+      .select('id, name, is_active')
+      .eq('id', major_id)
+      .maybeSingle()
+
+    if (maj && !maj.is_active) {
+      return {
+        error: `Jurusan "${maj.name}" sedang nonaktif dan tidak dapat dipilih.`,
+      }
+    }
+  }
+
   // 4. Validasi kuota di database jika application_detail_id dipilih
   if (application_detail_id) {
     const { data: detailData, error: detailError } = await supabase
@@ -296,9 +341,60 @@ export async function updateParticipantAction(
   // 4. Periksa apakah rincian pengajuan diubah ke rincian baru
   const { data: existingParticipant } = await supabase
     .from('participants')
-    .select('application_detail_id')
+    .select('application_detail_id, major_id, positioning_by_request_id, positioning_by_hc_id')
     .eq('id', cleanPartId)
     .maybeSingle()
+
+  // Validasi posisi permohonan (jika diubah, posisi baru harus aktif)
+  if (
+    positioning_by_request_id &&
+    positioning_by_request_id !== existingParticipant?.positioning_by_request_id
+  ) {
+    const { data: posReq } = await supabase
+      .from('positions')
+      .select('id, name, is_active')
+      .eq('id', positioning_by_request_id)
+      .maybeSingle()
+
+    if (posReq && !posReq.is_active) {
+      return {
+        error: `Posisi permohonan "${posReq.name}" sedang nonaktif dan tidak dapat dipilih.`,
+      }
+    }
+  }
+
+  // Validasi posisi penempatan HC (jika diubah, posisi baru harus aktif)
+  if (
+    positioning_by_hc_id &&
+    positioning_by_hc_id !== existingParticipant?.positioning_by_hc_id
+  ) {
+    const { data: posHc } = await supabase
+      .from('positions')
+      .select('id, name, is_active')
+      .eq('id', positioning_by_hc_id)
+      .maybeSingle()
+
+    if (posHc && !posHc.is_active) {
+      return {
+        error: `Posisi penempatan HC "${posHc.name}" sedang nonaktif dan tidak dapat dipilih.`,
+      }
+    }
+  }
+
+  // Validasi jurusan (jika diubah, jurusan baru harus aktif)
+  if (major_id && major_id !== existingParticipant?.major_id) {
+    const { data: maj } = await supabase
+      .from('majors')
+      .select('id, name, is_active')
+      .eq('id', major_id)
+      .maybeSingle()
+
+    if (maj && !maj.is_active) {
+      return {
+        error: `Jurusan "${maj.name}" sedang nonaktif dan tidak dapat dipilih.`,
+      }
+    }
+  }
 
   if (
     application_detail_id &&
