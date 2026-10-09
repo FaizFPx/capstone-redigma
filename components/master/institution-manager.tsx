@@ -333,11 +333,10 @@ export function InstitutionManager({
                       </td>
                       <td className="px-4 py-3.5 whitespace-nowrap text-center">
                         <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            hasApplications
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${hasApplications
                               ? 'bg-blue-50 text-blue-700 border border-blue-200'
                               : 'bg-gray-100 text-gray-500'
-                          }`}
+                            }`}
                         >
                           {inst.applications_count || 0} berkas
                         </span>

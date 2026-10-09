@@ -24,20 +24,21 @@ export async function createInstitutionAction(
 
     const supabase = await createClient()
 
-    // 1. Cek duplikasi nama institusi (case-insensitive)
-    const { data: existing, error: checkError } = await supabase
+    // 1. Cek duplikasi nama institusi (case-insensitive & trimmed)
+    const normalizedName = name.trim()
+    const { data: existingList, error: checkError } = await supabase
       .from('institutions')
       .select('id, name')
-      .ilike('name', name)
-      .maybeSingle()
+      .ilike('name', normalizedName)
+      .limit(1)
 
     if (checkError) {
       console.error('Error checking institution duplicate:', checkError)
     }
 
-    if (existing) {
+    if (existingList && existingList.length > 0) {
       return {
-        error: `Institusi dengan nama "${name}" sudah terdaftar. Gunakan nama yang berbeda.`,
+        error: `Institusi dengan nama "${normalizedName}" sudah terdaftar. Gunakan nama yang berbeda.`,
       }
     }
 
@@ -95,21 +96,22 @@ export async function updateInstitutionAction(
 
     const supabase = await createClient()
 
-    // 1. Cek duplikasi nama institusi pada record lain
-    const { data: existing, error: checkError } = await supabase
+    // 1. Cek duplikasi nama institusi pada record lain (case-insensitive & trimmed)
+    const normalizedName = name.trim()
+    const { data: existingList, error: checkError } = await supabase
       .from('institutions')
       .select('id, name')
-      .ilike('name', name)
+      .ilike('name', normalizedName)
       .neq('id', id)
-      .maybeSingle()
+      .limit(1)
 
     if (checkError) {
       console.error('Error checking duplicate for update:', checkError)
     }
 
-    if (existing) {
+    if (existingList && existingList.length > 0) {
       return {
-        error: `Institusi dengan nama "${name}" sudah digunakan oleh institusi lain.`,
+        error: `Institusi dengan nama "${normalizedName}" sudah digunakan oleh institusi lain.`,
       }
     }
 

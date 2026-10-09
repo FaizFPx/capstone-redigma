@@ -73,19 +73,33 @@ export async function createApplicationAction(
 
   // Jika institusi baru diisi manual
   if ((!institution_id || institution_id === 'NEW') && new_institution_name) {
-    const { data: newInst, error: instErr } = await supabase
-      .from('institutions')
-      .insert({
-        name: new_institution_name,
-        type: new_institution_type || 'SMK',
-      })
-      .select('id')
-      .single()
+    const trimmedName = new_institution_name.trim()
 
-    if (instErr || !newInst) {
-      return { error: `Gagal menambahkan institusi: ${instErr?.message || 'Unknown error'}` }
+    // Cek apakah institusi dengan nama ini sudah terdaftar (case-insensitive)
+    const { data: existingInst } = await supabase
+      .from('institutions')
+      .select('id, name')
+      .ilike('name', trimmedName)
+      .limit(1)
+
+    if (existingInst && existingInst.length > 0) {
+      // Otomatis tautkan ke institusi yang sudah ada agar tidak terjadi duplikasi data
+      institution_id = existingInst[0].id
+    } else {
+      const { data: newInst, error: instErr } = await supabase
+        .from('institutions')
+        .insert({
+          name: trimmedName,
+          type: new_institution_type || 'SMK',
+        })
+        .select('id')
+        .single()
+
+      if (instErr || !newInst) {
+        return { error: `Gagal menambahkan institusi: ${instErr?.message || 'Unknown error'}` }
+      }
+      institution_id = newInst.id
     }
-    institution_id = newInst.id
   }
 
   if (!institution_id || institution_id === 'NEW' || institution_id === '-- Pilih Institusi --') {
@@ -305,19 +319,33 @@ export async function updateApplicationAction(
   }
 
   if ((!institution_id || institution_id === 'NEW') && new_institution_name) {
-    const { data: newInst, error: instErr } = await supabase
-      .from('institutions')
-      .insert({
-        name: new_institution_name,
-        type: new_institution_type || 'SMK',
-      })
-      .select('id')
-      .single()
+    const trimmedName = new_institution_name.trim()
 
-    if (instErr || !newInst) {
-      return { error: `Gagal menambahkan institusi: ${instErr?.message || 'Unknown error'}` }
+    // Cek apakah institusi dengan nama ini sudah terdaftar (case-insensitive)
+    const { data: existingInst } = await supabase
+      .from('institutions')
+      .select('id, name')
+      .ilike('name', trimmedName)
+      .limit(1)
+
+    if (existingInst && existingInst.length > 0) {
+      // Otomatis tautkan ke institusi yang sudah ada agar tidak terjadi duplikasi data
+      institution_id = existingInst[0].id
+    } else {
+      const { data: newInst, error: instErr } = await supabase
+        .from('institutions')
+        .insert({
+          name: trimmedName,
+          type: new_institution_type || 'SMK',
+        })
+        .select('id')
+        .single()
+
+      if (instErr || !newInst) {
+        return { error: `Gagal menambahkan institusi: ${instErr?.message || 'Unknown error'}` }
+      }
+      institution_id = newInst.id
     }
-    institution_id = newInst.id
   }
 
   if (!institution_id || institution_id === 'NEW' || institution_id === '-- Pilih Institusi --') {

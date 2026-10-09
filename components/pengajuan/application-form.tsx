@@ -73,35 +73,35 @@ export function ApplicationForm({
   const [details, setDetails] = useState<FormDetailRow[]>(
     initialData?.details && initialData.details.length > 0
       ? initialData.details.map((d) => ({
-          major_id: d.major_id || '',
-          new_major_name: '',
-          requested_position_id: d.requested_position_id || '',
-          new_position_name: '',
-          requested_quota: d.requested_quota ?? '',
-          approved_quota: d.approved_quota ?? '',
-          notes: d.notes || '',
-          show_major: Boolean(d.major_id),
-          show_position: Boolean(d.requested_position_id),
-          show_quota:
-            (d.requested_quota !== null && d.requested_quota !== undefined) ||
-            (d.approved_quota !== null && d.approved_quota !== undefined),
-          show_notes: Boolean(d.notes && d.notes.trim()),
-        }))
+        major_id: d.major_id || '',
+        new_major_name: '',
+        requested_position_id: d.requested_position_id || '',
+        new_position_name: '',
+        requested_quota: d.requested_quota ?? '',
+        approved_quota: d.approved_quota ?? '',
+        notes: d.notes || '',
+        show_major: Boolean(d.major_id),
+        show_position: Boolean(d.requested_position_id),
+        show_quota:
+          (d.requested_quota !== null && d.requested_quota !== undefined) ||
+          (d.approved_quota !== null && d.approved_quota !== undefined),
+        show_notes: Boolean(d.notes && d.notes.trim()),
+      }))
       : [
-          {
-            major_id: '',
-            new_major_name: '',
-            requested_position_id: '',
-            new_position_name: '',
-            requested_quota: '',
-            approved_quota: '',
-            notes: '',
-            show_major: false,
-            show_position: false,
-            show_quota: false,
-            show_notes: false,
-          },
-        ]
+        {
+          major_id: '',
+          new_major_name: '',
+          requested_position_id: '',
+          new_position_name: '',
+          requested_quota: '',
+          approved_quota: '',
+          notes: '',
+          show_major: false,
+          show_position: false,
+          show_quota: false,
+          show_notes: false,
+        },
+      ]
   )
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -760,9 +760,8 @@ export function ApplicationForm({
                     {/* Baris 1: Jurusan & Posisi yang Diminta */}
                     {(row.show_major || row.show_position) && (
                       <div
-                        className={`grid grid-cols-1 ${
-                          row.show_major && row.show_position ? 'sm:grid-cols-2' : ''
-                        } gap-4`}
+                        className={`grid grid-cols-1 ${row.show_major && row.show_position ? 'sm:grid-cols-2' : ''
+                          } gap-4`}
                       >
                         {/* Field Jurusan */}
                         {row.show_major && (
