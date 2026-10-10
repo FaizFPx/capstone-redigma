@@ -13,6 +13,11 @@ import type {
 export default async function TambahPengajuanPage() {
   const supabase = await createClient()
 
+  // Ambil user auth saat ini untuk default PIC HC
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser()
+
   // Ambil seluruh data master pendukung untuk formulir
   const [
     { data: instData },
@@ -36,6 +41,12 @@ export default async function TambahPengajuanPage() {
   const users: UserSummary[] = userData || []
   const stages: Stage[] = stageData || []
   const decisions: Decision[] = decData || []
+
+  const currentProfile = users.find(
+    (u) =>
+      (authUser?.id && u.id === authUser.id) ||
+      (authUser?.email && u.email.toLowerCase() === authUser.email.toLowerCase())
+  )
 
   return (
     <div className="space-y-6">
@@ -66,6 +77,7 @@ export default async function TambahPengajuanPage() {
         stages={stages}
         decisions={decisions}
         isEdit={false}
+        defaultPicHcId={currentProfile?.id}
       />
     </div>
   )

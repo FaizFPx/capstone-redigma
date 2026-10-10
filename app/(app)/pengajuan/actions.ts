@@ -196,15 +196,28 @@ export async function createApplicationAction(
 
       // Tambah jurusan baru jika diinput teks baru
       if (item.new_major_name && item.new_major_name.trim()) {
-        const { data: mData, error: mErr } = await supabase
+        const trimmedMajorName = item.new_major_name.trim()
+
+        // Cek apakah jurusan sudah terdaftar (case-insensitive)
+        const { data: existingMajor } = await supabase
           .from('majors')
-          .insert({ name: item.new_major_name.trim() })
-          .select('id')
-          .single()
-        if (mErr) {
-          console.error('Error creating new major:', mErr)
-        } else if (mData) {
-          major_id = mData.id
+          .select('id, name')
+          .ilike('name', trimmedMajorName)
+          .limit(1)
+
+        if (existingMajor && existingMajor.length > 0) {
+          major_id = existingMajor[0].id
+        } else {
+          const { data: mData, error: mErr } = await supabase
+            .from('majors')
+            .insert({ name: trimmedMajorName })
+            .select('id')
+            .single()
+          if (mErr) {
+            console.error('Error creating new major:', mErr)
+          } else if (mData) {
+            major_id = mData.id
+          }
         }
       } else {
         major_id = parseOptionalUuid(item.major_id)
@@ -212,15 +225,28 @@ export async function createApplicationAction(
 
       // Tambah posisi baru jika diinput teks baru
       if (item.new_position_name && item.new_position_name.trim()) {
-        const { data: pData, error: pErr } = await supabase
+        const trimmedPosName = item.new_position_name.trim()
+
+        // Cek apakah posisi sudah terdaftar (case-insensitive)
+        const { data: existingPos } = await supabase
           .from('positions')
-          .insert({ name: item.new_position_name.trim() })
-          .select('id')
-          .single()
-        if (pErr) {
-          console.error('Error creating new position:', pErr)
-        } else if (pData) {
-          requested_position_id = pData.id
+          .select('id, name')
+          .ilike('name', trimmedPosName)
+          .limit(1)
+
+        if (existingPos && existingPos.length > 0) {
+          requested_position_id = existingPos[0].id
+        } else {
+          const { data: pData, error: pErr } = await supabase
+            .from('positions')
+            .insert({ name: trimmedPosName })
+            .select('id')
+            .single()
+          if (pErr) {
+            console.error('Error creating new position:', pErr)
+          } else if (pData) {
+            requested_position_id = pData.id
+          }
         }
       } else {
         // Jika user memilih "-- Tidak ditentukan --" (nilai ''), maka menjadi NULL
@@ -472,23 +498,49 @@ export async function updateApplicationAction(
         let requested_position_id: string | null = null
 
         if (item.new_major_name && item.new_major_name.trim()) {
-          const { data: mData, error: mErr } = await supabase
+          const trimmedMajorName = item.new_major_name.trim()
+
+          // Cek apakah jurusan sudah terdaftar (case-insensitive)
+          const { data: existingMajor } = await supabase
             .from('majors')
-            .insert({ name: item.new_major_name.trim() })
-            .select('id')
-            .single()
-          if (!mErr && mData) major_id = mData.id
+            .select('id, name')
+            .ilike('name', trimmedMajorName)
+            .limit(1)
+
+          if (existingMajor && existingMajor.length > 0) {
+            major_id = existingMajor[0].id
+          } else {
+            const { data: mData, error: mErr } = await supabase
+              .from('majors')
+              .insert({ name: trimmedMajorName })
+              .select('id')
+              .single()
+            if (!mErr && mData) major_id = mData.id
+          }
         } else {
           major_id = parseOptionalUuid(item.major_id)
         }
 
         if (item.new_position_name && item.new_position_name.trim()) {
-          const { data: pData, error: pErr } = await supabase
+          const trimmedPosName = item.new_position_name.trim()
+
+          // Cek apakah posisi sudah terdaftar (case-insensitive)
+          const { data: existingPos } = await supabase
             .from('positions')
-            .insert({ name: item.new_position_name.trim() })
-            .select('id')
-            .single()
-          if (!pErr && pData) requested_position_id = pData.id
+            .select('id, name')
+            .ilike('name', trimmedPosName)
+            .limit(1)
+
+          if (existingPos && existingPos.length > 0) {
+            requested_position_id = existingPos[0].id
+          } else {
+            const { data: pData, error: pErr } = await supabase
+              .from('positions')
+              .insert({ name: trimmedPosName })
+              .select('id')
+              .single()
+            if (!pErr && pData) requested_position_id = pData.id
+          }
         } else {
           requested_position_id = parseOptionalUuid(item.requested_position_id)
         }

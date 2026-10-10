@@ -45,6 +45,7 @@ interface ApplicationFormProps {
   stages: Stage[]
   decisions: Decision[]
   isEdit?: boolean
+  defaultPicHcId?: string
 }
 
 export function ApplicationForm({
@@ -56,6 +57,7 @@ export function ApplicationForm({
   stages,
   decisions,
   isEdit = false,
+  defaultPicHcId,
 }: ApplicationFormProps) {
   const router = useRouter()
   const [appType, setAppType] = useState<ApplicationType>(
@@ -523,7 +525,8 @@ export function ApplicationForm({
             </label>
             <select
               name="pic_hc_id"
-              defaultValue={initialData?.pic_hc_id || ''}
+              defaultValue={initialData ? (initialData.pic_hc_id || '') : (defaultPicHcId || '')}
+              onChange={() => setIsDirty(true)}
               className="mt-2 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
             >
               <option value="">-- Belum Ditentukan --</option>
@@ -774,40 +777,49 @@ export function ApplicationForm({
                         {/* Field Jurusan */}
                         {row.show_major && (
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
                               <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
                                 Jurusan <span className="text-red-500">*</span>
                               </label>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveMajor(idx)}
-                                className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                                title="Batal / Sembunyikan jurusan"
-                              >
-                                Hapus
-                              </button>
-                            </div>
-                            {row.major_id === 'NEW' ? (
-                              <div className="space-y-1.5">
-                                <input
-                                  type="text"
-                                  placeholder="Nama jurusan baru..."
-                                  value={row.new_major_name}
-                                  onChange={(e) =>
-                                    handleDetailChange(idx, 'new_major_name', e.target.value)
-                                  }
-                                  autoComplete="off"
-                                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                                  required
-                                />
+                              <div className="flex items-center gap-2.5">
                                 <button
                                   type="button"
-                                  onClick={() => handleDetailChange(idx, 'major_id', '')}
-                                  className="text-xs text-blue-600 hover:underline cursor-pointer"
+                                  onClick={() => {
+                                    setIsDirty(true)
+                                    handleDetailChange(
+                                      idx,
+                                      'major_id',
+                                      row.major_id === 'NEW' ? '' : 'NEW'
+                                    )
+                                  }}
+                                  className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
                                 >
-                                  ← Pilih dari daftar
+                                  {row.major_id === 'NEW'
+                                    ? 'Pilih dari Daftar'
+                                    : '+ Tambah Jurusan Baru'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMajor(idx)}
+                                  className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                                  title="Batal / Sembunyikan jurusan"
+                                >
+                                  Hapus
                                 </button>
                               </div>
+                            </div>
+                            {row.major_id === 'NEW' ? (
+                              <input
+                                type="text"
+                                placeholder="Nama jurusan baru..."
+                                value={row.new_major_name}
+                                onChange={(e) =>
+                                  handleDetailChange(idx, 'new_major_name', e.target.value)
+                                }
+                                autoComplete="off"
+                                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                                required
+                              />
                             ) : (
                               <select
                                 value={row.major_id}
@@ -825,7 +837,6 @@ export function ApplicationForm({
                                       {m.name} {m.code ? `(${m.code})` : ''}{m.is_active === false ? ' (Nonaktif)' : ''}
                                     </option>
                                   ))}
-                                <option value="NEW">+ Tambah Jurusan Baru</option>
                               </select>
                             )}
                           </div>
@@ -834,44 +845,51 @@ export function ApplicationForm({
                         {/* Field Posisi yang Diminta */}
                         {row.show_position && (
                           <div className="space-y-1">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
                               <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700">
                                 Posisi yang Diminta
                               </label>
-                              <button
-                                type="button"
-                                onClick={() => handleRemovePosition(idx)}
-                                className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
-                                title="Batal / Sembunyikan posisi"
-                              >
-                                Hapus
-                              </button>
+                              <div className="flex items-center gap-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsDirty(true)
+                                    handleDetailChange(
+                                      idx,
+                                      'requested_position_id',
+                                      row.requested_position_id === 'NEW' ? '' : 'NEW'
+                                    )
+                                  }}
+                                  className="text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                                >
+                                  {row.requested_position_id === 'NEW'
+                                    ? 'Pilih dari Daftar'
+                                    : '+ Tambah Posisi Baru'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemovePosition(idx)}
+                                  className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
+                                  title="Batal / Sembunyikan posisi"
+                                >
+                                  Hapus
+                                </button>
+                              </div>
                             </div>
                             <p className="text-[11px] text-gray-500 pb-0.5">
                               Posisi yang diajukan oleh pemohon. Dapat dikosongkan jika belum ditentukan.
                             </p>
                             {row.requested_position_id === 'NEW' ? (
-                              <div className="space-y-1.5">
-                                <input
-                                  type="text"
-                                  placeholder="Nama posisi baru..."
-                                  value={row.new_position_name}
-                                  onChange={(e) =>
-                                    handleDetailChange(idx, 'new_position_name', e.target.value)
-                                  }
-                                  autoComplete="off"
-                                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleDetailChange(idx, 'requested_position_id', '')
-                                  }
-                                  className="text-xs text-blue-600 hover:underline cursor-pointer"
-                                >
-                                  ← Pilih dari daftar
-                                </button>
-                              </div>
+                              <input
+                                type="text"
+                                placeholder="Nama posisi baru..."
+                                value={row.new_position_name}
+                                onChange={(e) =>
+                                  handleDetailChange(idx, 'new_position_name', e.target.value)
+                                }
+                                autoComplete="off"
+                                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-hidden"
+                              />
                             ) : (
                               <select
                                 value={row.requested_position_id}
@@ -888,7 +906,6 @@ export function ApplicationForm({
                                       {p.name}{p.is_active === false ? ' (Nonaktif)' : ''}
                                     </option>
                                   ))}
-                                <option value="NEW">+ Tambah Posisi Baru</option>
                               </select>
                             )}
                           </div>
