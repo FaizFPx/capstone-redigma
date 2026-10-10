@@ -70,7 +70,7 @@ export default async function EditPengajuanPage({
     { data: stageData },
     { data: decData },
   ] = await Promise.all([
-    supabase.from('institutions').select('id, name, type, is_active').order('name'),
+    supabase.from('institutions').select('id, name, type').order('name'),
     supabase.from('majors').select('id, name, code, is_active').order('name'),
     supabase.from('positions').select('id, name, is_active').order('name'),
     supabase.from('users').select('id, full_name, email, role').order('full_name'),

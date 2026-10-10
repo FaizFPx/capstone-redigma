@@ -106,19 +106,6 @@ export async function createApplicationAction(
     return { error: 'Institusi wajib dipilih atau diisi.' }
   }
 
-  // Validasi status aktif institusi terpilih
-  const { data: instCheck } = await supabase
-    .from('institutions')
-    .select('id, name, is_active')
-    .eq('id', institution_id)
-    .maybeSingle()
-
-  if (instCheck && !instCheck.is_active) {
-    return {
-      error: `Institusi "${instCheck.name}" sedang berstatus nonaktif dan tidak dapat dipilih.`,
-    }
-  }
-
   // 4. Parse & validasi awal detail rows sebelum insert
   const detailsJson = String(formData.get('details_json') || '[]')
   let parsedDetails: Array<{
@@ -396,21 +383,6 @@ export async function updateApplicationAction(
 
   if (!institution_id || institution_id === 'NEW' || institution_id === '-- Pilih Institusi --') {
     return { error: 'Institusi wajib dipilih atau diisi.' }
-  }
-
-  // Periksa apakah institusi diubah ke institusi lain yang nonaktif
-  if (institution_id && institution_id !== existingApp?.institution_id) {
-    const { data: instCheck } = await supabase
-      .from('institutions')
-      .select('id, name, is_active')
-      .eq('id', institution_id)
-      .maybeSingle()
-
-    if (instCheck && !instCheck.is_active) {
-      return {
-        error: `Institusi "${instCheck.name}" sedang berstatus nonaktif dan tidak dapat dipilih.`,
-      }
-    }
   }
 
   // 3. Update tabel applications
